@@ -1,0 +1,12 @@
+.next
+node_modules
+.env
+.env.local
+*.log
+coverage
+dist
+logs
+*.xlsx
+*.xls
+*.csv
+*.tsbuildinfo

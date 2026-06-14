@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f7fafc;
+  --foreground: #0b1220;
+  --card: rgba(255, 255, 255, 0.78);
+  --card-foreground: #0b1220;
+  --muted: #eef3f8;
+  --muted-foreground: #667085;
+  --border: rgba(15, 23, 42, 0.1);
+  --primary: #0b2a4a;
+  --primary-foreground: #ffffff;
+  --accent: #ff7a1a;
+  --success: #10b981;
+  --info: #2563eb;
+  --ring: #ff7a1a;
+}
+
+.dark {
+  --background: #07111f;
+  --foreground: #eef6ff;
+  --card: rgba(11, 28, 50, 0.76);
+  --card-foreground: #eef6ff;
+  --muted: #10243a;
+  --muted-foreground: #9fb0c3;
+  --border: rgba(226, 232, 240, 0.13);
+  --primary: #7bb7ff;
+  --primary-foreground: #07111f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.18), transparent 32rem),
+    radial-gradient(circle at top right, rgba(255, 122, 26, 0.15), transparent 26rem),
+    linear-gradient(135deg, #f8fbff 0%, #eef5fb 46%, #ffffff 100%);
+  color: var(--foreground);
+}
+
+.dark body {
+  background:
+    radial-gradient(circle at 15% 0%, rgba(37, 99, 235, 0.28), transparent 28rem),
+    radial-gradient(circle at 90% 8%, rgba(255, 122, 26, 0.2), transparent 24rem),
+    linear-gradient(135deg, #06101c 0%, #0a1627 50%, #07111f 100%);
+}
+
+button,
+a,
+[role="button"] {
+  cursor: pointer;
+}
+
+.glass {
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: 0 20px 60px rgba(9, 30, 66, 0.08);
+  backdrop-filter: blur(20px);
+}
+
+.office-bg {
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(37, 99, 235, 0.12), transparent 28rem),
+    linear-gradient(rgba(7, 17, 31, 0.16), rgba(7, 17, 31, 0.08)),
+    url("/brand/bgse.png");
+  background-position: center;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  background-color: #eef3f8;
+}
+
+.leaflet-container {
+  min-height: 320px;
+  width: 100%;
+  border-radius: 1.5rem;
+}
