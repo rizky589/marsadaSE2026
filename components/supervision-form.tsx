@@ -2,13 +2,13 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Camera, Save } from "lucide-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { assignments } from "@/lib/mock-data";
+import { loadImportedAllocations, resolvePclName, titleCase, type ImportedAllocationRow } from "@/lib/imported-allocations";
 
 const schema = z.object({
   date: z.string().date(),
@@ -29,12 +29,12 @@ type Values = z.infer<typeof schema>;
 type InputValues = z.input<typeof schema>;
 
 export function SupervisionForm() {
-  const pmlAssignments = assignments.filter((assignment) => assignment.pmlId === "pml-001");
+  const [assignments, setAssignments] = useState<ImportedAllocationRow[]>([]);
   const form = useForm<InputValues, unknown, Values>({
     resolver: zodResolver(schema),
     defaultValues: {
       date: "2026-05-04",
-      assignmentId: pmlAssignments[0]?.id ?? "",
+      assignmentId: "",
       type: "Pemeriksaan lapangan",
       inspectedObjects: 0,
       result: "",
@@ -47,7 +47,14 @@ export function SupervisionForm() {
       documentationName: ""
     }
   });
-  const selected = useMemo(() => assignments.find((item) => item.id === form.watch("assignmentId")), [form.watch("assignmentId")]);
+
+  useEffect(() => {
+    const importedRows = loadImportedAllocations();
+    setAssignments(importedRows);
+    if (importedRows[0]) form.setValue("assignmentId", importedRows[0].idSubSls);
+  }, [form]);
+
+  const selected = useMemo(() => assignments.find((item) => item.idSubSls === form.watch("assignmentId")), [assignments, form.watch("assignmentId")]);
 
   function onSubmit(values: Values) {
     toast.success("Pengawasan PML tersimpan", {
@@ -59,12 +66,17 @@ export function SupervisionForm() {
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Tanggal"><Input type="date" {...form.register("date")} /></Field>
-        <Field label="Penugasan"><select className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white/75 px-4 text-sm dark:bg-white/10" {...form.register("assignmentId")}>{pmlAssignments.map((item) => <option key={item.id} value={item.id}>{item.pcl} - {item.sls}</option>)}</select></Field>
-        <Readonly label="Nama PML" value={selected?.pml} />
-        <Readonly label="Nama PCL" value={selected?.pcl} />
-        <Readonly label="Kecamatan" value={selected?.district} />
-        <Readonly label="Desa" value={selected?.village} />
-        <Readonly label="SLS" value={selected?.sls} />
+        <Field label="Penugasan">
+          <select className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white/75 px-4 text-sm dark:bg-white/10" {...form.register("assignmentId")}>
+            {!assignments.length ? <option value="">Belum ada alokasi import</option> : null}
+            {assignments.map((item) => <option key={item.idSubSls} value={item.idSubSls}>{titleCase(resolvePclName(item.pcl, item.pml))} - {titleCase(item.namaSls)} / {item.kodeSubSls}</option>)}
+          </select>
+        </Field>
+        <Readonly label="Nama PML" value={selected ? titleCase(selected.pml) : undefined} />
+        <Readonly label="Nama PCL" value={selected ? titleCase(resolvePclName(selected.pcl, selected.pml)) : undefined} />
+        <Readonly label="Kecamatan" value={selected ? titleCase(selected.kecamatan) : undefined} />
+        <Readonly label="Desa" value={selected ? titleCase(selected.desa) : undefined} />
+        <Readonly label="SLS" value={selected ? `${titleCase(selected.namaSls)} / ${selected.kodeSubSls}` : undefined} />
         <Field label="Jenis pengawasan"><Input {...form.register("type")} /></Field>
         <Field label="Jumlah objek diperiksa"><Input type="number" min={0} {...form.register("inspectedObjects")} /></Field>
         <Field label="Jumlah sesuai"><Input type="number" min={0} {...form.register("matched")} /></Field>

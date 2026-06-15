@@ -1,201 +1,83 @@
 "use client";
 
-import { CheckCircle2, Eye, History, RotateCcw, Send } from "lucide-react";
-import { useMemo, useState } from "react";
-import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { assignments, dailyReports } from "@/lib/mock-data";
-import type { DailyReport } from "@/lib/types";
-import {
-  assignmentProgress,
-  cumulativeBefore,
-  dailyNeed,
-  productivity,
-  progressCategory,
-  progressCategoryLabel
-} from "@/lib/progress-calculations";
-import { formatDate, numberId, pct } from "@/lib/utils";
+import { Inbox } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { loadImportedAllocations, normalizeName, resolvePclName, titleCase, type ImportedAllocationRow } from "@/lib/imported-allocations";
+import { numberId } from "@/lib/utils";
 
 export function PmlReportQueue() {
-  const [selected, setSelected] = useState<DailyReport | null>(dailyReports.find((report) => report.status === "dikirim") ?? null);
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const queue = dailyReports.filter((report) => report.status === "dikirim" || report.status === "dikembalikan");
+  const [rows, setRows] = useState<ImportedAllocationRow[]>([]);
 
-  function getNote(id: string) {
-    return notes[id] ?? queue.find((report) => report.id === id)?.pmlNote ?? "";
-  }
+  useEffect(() => {
+    setRows(loadImportedAllocations());
+  }, []);
 
-  function setNote(id: string, value: string) {
-    setNotes((current) => ({ ...current, [id]: value }));
-  }
-
-  function approve(report: DailyReport) {
-    toast.success(`Laporan ${report.pclName} disetujui`, {
-      description: "Laporan dikunci, progres resmi diperbarui, PCL menerima notifikasi, dan dashboard semua tingkatan diperbarui."
+  const summary = useMemo(() => {
+    const pml = new Set<string>();
+    const pcl = new Set<string>();
+    rows.forEach((row) => {
+      pml.add(normalizeName(row.pml));
+      pcl.add(`${normalizeName(row.pml)}|${resolvePclName(row.pcl, row.pml)}`);
     });
-  }
+    return { pml: pml.size, pcl: pcl.size, sls: rows.length, target: rows.reduce((sum, row) => sum + row.targetAwal, 0) };
+  }, [rows]);
 
-  function returnReport(report: DailyReport) {
-    if (!getNote(report.id).trim()) {
-      toast.error("Catatan wajib diisi saat mengembalikan laporan");
-      return;
-    }
-    toast.warning(`Laporan ${report.pclName} dikembalikan`, {
-      description: "PCL menerima notifikasi dan laporan dapat diperbaiki."
-    });
-  }
+  const sampleRows = rows.slice(0, 8);
 
   return (
-    <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,.9fr)]">
-      <div className="space-y-4">
-        {queue.map((report) => {
-          const before = cumulativeBefore(report, dailyReports);
-          const after = before + report.completedToday;
-          const remaining = Math.max(0, report.target - after);
-          const assignment = assignments.find((item) => item.id === report.assignmentId);
-          const official = assignment ? assignmentProgress(assignment, dailyReports) : null;
-          const category = progressCategory(official?.percent ?? 0, Boolean(official?.completed));
-
-          return (
-            <article key={report.id} className="glass cursor-pointer rounded-3xl p-4 transition-all hover:-translate-y-0.5 hover:border-[#ff7a1a]/50">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#ff7a1a]">{formatDate(report.reportDate)}</p>
-                  <h3 className="mt-1 text-lg font-black">{report.pclName}</h3>
-                  <p className="text-sm text-slate-500">{report.village} / SLS {report.sls}</p>
-                </div>
-                <Badge>{report.status}</Badge>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <Metric label="Target SLS" value={numberId(report.target)} />
-                <Metric label="Hasil hari ini" value={numberId(report.completedToday)} />
-                <Metric label="Kumulatif sebelumnya" value={numberId(before)} />
-                <Metric label="Kumulatif setelah laporan" value={numberId(after)} />
-                <Metric label="Sisa target" value={numberId(remaining)} />
-                <Metric label="Rata-rata harian" value={numberId(Math.round(productivity(after)))} />
-                <Metric label="Kebutuhan per hari" value={numberId(Math.ceil(dailyNeed(remaining)))} />
-                <Metric label="Status otomatis" value={progressCategoryLabel(category)} />
-              </div>
-
-              <div className="mt-4 space-y-2">
-                <div className="flex justify-between text-xs font-bold">
-                  <span>Progres SLS setelah laporan</span>
-                  <span>{pct(after, report.target)}%</span>
-                </div>
-                <Progress value={pct(after, report.target)} />
-              </div>
-
-              <div className="mt-4 rounded-2xl bg-slate-50 p-3 text-sm dark:bg-white/5">
-                <p className="font-bold">Kendala</p>
-                <p className="mt-1 text-slate-600 dark:text-slate-300">{report.issue || "Tidak ada kendala dilaporkan."}</p>
-              </div>
-
-              <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-                <Button variant="secondary" onClick={() => setSelected(report)}>
-                  <Eye className="h-4 w-4" /> Buka Detail
-                </Button>
-                <Button variant="secondary" onClick={() => returnReport(report)}>
-                  <RotateCcw className="h-4 w-4" /> Kembalikan
-                </Button>
-                <Button onClick={() => approve(report)}>
-                  <CheckCircle2 className="h-4 w-4" /> Setujui
-                </Button>
-              </div>
-            </article>
-          );
-        })}
-      </div>
-
-      <aside className="xl:sticky xl:top-24 xl:self-start">
-        {selected ? <ReportDetail report={selected} note={getNote(selected.id)} setNote={(value) => setNote(selected.id, value)} onApprove={() => approve(selected)} onReturn={() => returnReport(selected)} /> : null}
-      </aside>
-    </div>
-  );
-}
-
-function ReportDetail({ report, note, setNote, onApprove, onReturn }: { report: DailyReport; note: string; setNote: (value: string) => void; onApprove: () => void; onReturn: () => void }) {
-  const history = useMemo(
-    () => dailyReports.filter((item) => item.assignmentId === report.assignmentId && item.id !== report.id).sort((a, b) => a.reportDate.localeCompare(b.reportDate)),
-    [report]
-  );
-  const approvedBefore = cumulativeBefore(report, dailyReports);
-  const after = approvedBefore + report.completedToday;
-
-  return (
-    <section className="glass rounded-3xl p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="text-xl font-black">Detail Laporan</h2>
-          <p className="text-sm text-slate-500">{report.pclName} - {formatDate(report.reportDate)}</p>
+    <Card>
+      <CardHeader>
+        <CardTitle>Laporan Masuk</CardTitle>
+        <CardDescription>Belum ada laporan harian terkirim dari PCL. Antrean akan terisi setelah PCL mengirim laporan ke PML.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Metric label="PML dari alokasi" value={numberId(summary.pml)} />
+          <Metric label="PCL dari alokasi" value={numberId(summary.pcl)} />
+          <Metric label="SLS/Sub-SLS" value={numberId(summary.sls)} />
+          <Metric label="Target" value={numberId(summary.target)} />
         </div>
-        <Badge>{report.status}</Badge>
-      </div>
 
-      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-        <Metric label="Desa" value={report.village} />
-        <Metric label="SLS/Sub-SLS" value={`${report.sls} / ${report.subSlsId}`} />
-        <Metric label="Target aktual" value={numberId(report.target)} />
-        <Metric label="Kumulatif setelah" value={numberId(after)} />
-        <Metric label="Jam mulai" value={report.startTime} />
-        <Metric label="Jam selesai" value={report.endTime} />
-        <Metric label="Dikunjungi" value={numberId(report.visited)} />
-        <Metric label="Selesai hari ini" value={numberId(report.completedToday)} />
-        <Metric label="Pending" value={numberId(report.pending)} />
-        <Metric label="Kunjungan ulang" value={numberId(report.revisit)} />
-        <Metric label="Belum bertemu" value={numberId(report.notMet)} />
-        <Metric label="Menolak" value={numberId(report.refused)} />
-      </div>
-
-      <div className="mt-4 space-y-3 rounded-3xl border border-[var(--border)] bg-white/55 p-4 dark:bg-white/5">
-        <div className="flex items-center gap-2">
-          <History className="h-4 w-4 text-[#ff7a1a]" />
-          <h3 className="font-black">Target dan Histori SLS</h3>
+        <div className="rounded-3xl border border-dashed border-[var(--border)] bg-white/55 p-6 text-center dark:bg-white/5">
+          <Inbox className="mx-auto h-10 w-10 text-[#ff7a1a]" />
+          <h3 className="mt-3 font-black">Belum Ada Laporan Menunggu Pemeriksaan</h3>
+          <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-300">
+            Data lama telah dihapus dari antrean. Setelah PCL mengirim progres harian, laporan berstatus dikirim akan muncul di sini untuk disetujui atau dikembalikan PML.
+          </p>
         </div>
-        {history.length ? (
-          history.map((item) => (
-            <div key={item.id} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 p-3 text-sm dark:bg-white/5">
-              <div>
-                <p className="font-bold">{formatDate(item.reportDate)}</p>
-                <p className="text-slate-500">{item.completedToday} selesai - {item.status}</p>
-              </div>
-              <Badge>{item.status}</Badge>
-            </div>
-          ))
-        ) : (
-          <p className="text-sm text-slate-500">Belum ada laporan sebelumnya untuk SLS ini.</p>
-        )}
-      </div>
 
-      <label className="mt-4 block space-y-2">
-        <span className="text-sm font-bold">Catatan PML</span>
-        <textarea
-          value={note}
-          onChange={(event) => setNote(event.target.value)}
-          className="min-h-28 w-full rounded-2xl border border-[var(--border)] bg-white/75 px-4 py-3 text-sm outline-none transition focus:border-[#ff7a1a] focus:ring-2 focus:ring-orange-200 dark:bg-white/10"
-          placeholder="Wajib diisi jika laporan dikembalikan"
-        />
-      </label>
-
-      <div className="mt-4 grid gap-2 sm:grid-cols-2">
-        <Button variant="secondary" onClick={onReturn}>
-          <RotateCcw className="h-4 w-4" /> Kembalikan
-        </Button>
-        <Button onClick={onApprove}>
-          <Send className="h-4 w-4" /> Setujui
-        </Button>
-      </div>
-    </section>
+        {sampleRows.length ? (
+          <div className="overflow-x-auto rounded-3xl border border-[var(--border)]">
+            <table className="w-full min-w-[860px] text-left text-sm">
+              <thead className="bg-slate-100/80 text-xs uppercase text-slate-500 dark:bg-white/5 dark:text-slate-300">
+                <tr>{["PML", "PCL", "Desa", "SLS/Sub-SLS", "Target", "Status Laporan"].map((head) => <th key={head} className="px-4 py-3 font-black">{head}</th>)}</tr>
+              </thead>
+              <tbody>
+                {sampleRows.map((row) => (
+                  <tr key={row.idSubSls} className="border-t border-[var(--border)]">
+                    <td className="px-4 py-3">{titleCase(row.pml)}</td>
+                    <td className="px-4 py-3 font-bold">{titleCase(resolvePclName(row.pcl, row.pml))}</td>
+                    <td className="px-4 py-3">{titleCase(row.desa)}</td>
+                    <td className="px-4 py-3">{titleCase(row.namaSls)} / {row.kodeSubSls}</td>
+                    <td className="px-4 py-3">{numberId(row.targetAwal)}</td>
+                    <td className="px-4 py-3">Belum dikirim</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-2xl bg-white/70 p-3 dark:bg-white/5">
+    <div className="rounded-2xl bg-slate-50 p-3 dark:bg-white/5">
       <p className="text-xs font-bold text-slate-500">{label}</p>
-      <p className="mt-1 break-words font-black">{value}</p>
+      <p className="mt-1 font-black">{value}</p>
     </div>
   );
 }

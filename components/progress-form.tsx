@@ -11,7 +11,6 @@ import { getMyPclAssignmentsAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
-import { dailyReports } from "@/lib/mock-data";
 import type { Assignment } from "@/lib/types";
 
 const activityPeriod = {
@@ -63,10 +62,6 @@ const schema = z
     }
     if (values.endTime < values.startTime) {
       ctx.addIssue({ code: "custom", path: ["endTime"], message: "Jam selesai tidak boleh lebih awal dari jam mulai" });
-    }
-    const duplicate = dailyReports.some((report) => report.assignmentId === values.assignmentId && report.reportDate === values.reportDate && report.status !== "dibuka_kembali");
-    if (duplicate) {
-      ctx.addIssue({ code: "custom", path: ["assignmentId"], message: "Laporan tanggal dan penugasan ini sudah ada" });
     }
   });
 

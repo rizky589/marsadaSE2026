@@ -4,34 +4,34 @@ import { Download, FileSpreadsheet, FileText, ImageDown } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
-import { getKabupatenDashboard } from "@/lib/dashboard-data";
+import { summarizeImportedAllocations, type ImportedAllocationRow } from "@/lib/imported-allocations";
+import { numberId } from "@/lib/utils";
 
-const data = getKabupatenDashboard();
-
-function rows() {
+function rows(importRows: ImportedAllocationRow[]) {
+  const summary = summarizeImportedAllocations(importRows);
   return [
-    ["Progres kabupaten", `${Math.round(data.percent)}%`],
-    ["Progres 8 kecamatan", data.districtRows.map((row) => `${row.name}: ${row.progress}%`).join("; ")],
-    ["PML terendah", data.pmlRows.slice().sort((a, b) => a.progress - b.progress)[0]?.name ?? "-"],
-    ["PCL terendah", data.lowPclRows[0]?.name ?? "-"],
-    ["PCL belum melapor", String(data.notReported)],
-    ["Laporan belum diperiksa", String(data.pendingReports)],
-    ["Desa belum mulai", data.districtRows.filter((row) => row.selesai === 0).map((row) => row.name).join(", ") || "-"],
-    ["Kendala aktif", String(data.activeIssues)],
-    ["Kendala kritis", String(data.criticalIssues)],
-    ["Prediksi selesai", data.remaining === 0 ? "Selesai" : "Berjalan sesuai kebutuhan harian"]
+    ["Total target kabupaten", numberId(summary.target)],
+    ["Kecamatan", numberId(summary.kecamatan)],
+    ["Desa/Kelurahan", numberId(summary.desa)],
+    ["SLS/Sub-SLS", numberId(summary.sls)],
+    ["PML", numberId(summary.pml)],
+    ["PCL", numberId(summary.pcl)],
+    ["Progres kabupaten", "0%"],
+    ["PCL belum melapor", numberId(summary.pcl)],
+    ["Laporan belum diperiksa", "0"],
+    ["Prediksi selesai", "Menunggu laporan harian disetujui PML"]
   ];
 }
 
-export function EvaluationExport() {
+export function EvaluationExport({ rows: importRows }: { rows: ImportedAllocationRow[] }) {
   function exportExcel() {
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([["Komponen", "Isi"], ...rows()]), "Evaluasi");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([["Komponen", "Isi"], ...rows(importRows)]), "Evaluasi");
     XLSX.writeFile(workbook, "bahan-evaluasi-hari-ini.xlsx");
   }
 
   function exportCsv() {
-    const csv = [["Komponen", "Isi"], ...rows()].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
+    const csv = [["Komponen", "Isi"], ...rows(importRows)].map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
@@ -57,7 +57,7 @@ export function EvaluationExport() {
     ctx.font = "bold 34px Arial";
     ctx.fillText("Bahan Evaluasi Hari Ini", 48, 70);
     ctx.font = "22px Arial";
-    rows().forEach(([label, value], index) => ctx.fillText(`${label}: ${value}`.slice(0, 95), 48, 125 + index * 48));
+    rows(importRows).forEach(([label, value], index) => ctx.fillText(`${label}: ${value}`.slice(0, 95), 48, 125 + index * 48));
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/png");
     link.download = "bahan-evaluasi-hari-ini.png";
