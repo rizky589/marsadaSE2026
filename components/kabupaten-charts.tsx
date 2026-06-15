@@ -1,10 +1,10 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, Tooltip, XAxis, YAxis } from "recharts";
 import { SafeResponsiveContainer } from "@/components/safe-responsive-container";
-import { getKabupatenDashboard } from "@/lib/dashboard-data";
+import { loadImportedAllocations, normalizeName, resolvePclName, titleCase, type ImportedAllocationRow } from "@/lib/imported-allocations";
 
-const data = getKabupatenDashboard();
 const colors = ["#2563eb", "#ff7a1a", "#10b981", "#ef4444", "#64748b", "#8b5cf6"];
 
 function ChartBox({ title, children }: { title: string; children: React.ReactNode }) {
@@ -16,7 +16,55 @@ function ChartBox({ title, children }: { title: string; children: React.ReactNod
   );
 }
 
+function groupTargets(rows: ImportedAllocationRow[], keyFn: (row: ImportedAllocationRow) => string) {
+  const map = new Map<string, number>();
+  rows.forEach((row) => {
+    const key = keyFn(row);
+    map.set(key, (map.get(key) ?? 0) + row.targetAwal);
+  });
+  return [...map.entries()].map(([name, target]) => ({ name, target, selesai: 0, progress: 0 }));
+}
+
 export function KabupatenCharts() {
+  const [rows, setRows] = useState<ImportedAllocationRow[]>([]);
+
+  useEffect(() => {
+    setRows(loadImportedAllocations());
+  }, []);
+
+  const data = useMemo(() => {
+    const target = rows.reduce((sum, row) => sum + row.targetAwal, 0);
+    const districtRows = groupTargets(rows, (row) => titleCase(row.kecamatan));
+    const pmlRows = groupTargets(rows, (row) => titleCase(row.pml));
+    const burdenRows = groupTargets(rows, (row) => titleCase(resolvePclName(row.pcl, row.pml))).sort((a, b) => b.target - a.target).slice(0, 20);
+    const lowPclRows = burdenRows.map((row) => ({ name: row.name, progress: 0 }));
+    const highNeedRows = burdenRows.map((row) => ({ name: row.name, kebutuhan: Math.ceil(row.target / 57) })).sort((a, b) => b.kebutuhan - a.kebutuhan).slice(0, 20);
+    const statusRows = [
+      { status: "draft", jumlah: 0 },
+      { status: "dikirim", jumlah: 0 },
+      { status: "dikembalikan", jumlah: 0 },
+      { status: "disetujui", jumlah: 0 },
+      { status: "dibuka_kembali", jumlah: 0 }
+    ];
+    const productivityRows = ["Hari 1", "Hari 2", "Hari 3", "Hari 4", "Hari 5", "Hari 6", "Hari 7"].map((day) => ({ day, selesai: 0 }));
+    const issueRows = [
+      { category: "Rendah", jumlah: 0 },
+      { category: "Sedang", jumlah: 0 },
+      { category: "Tinggi", jumlah: 0 },
+      { category: "Kritis", jumlah: 0 }
+    ];
+
+    return { target, districtRows, pmlRows, burdenRows, lowPclRows, highNeedRows, statusRows, productivityRows, issueRows };
+  }, [rows]);
+
+  if (!rows.length) {
+    return (
+      <div className="rounded-3xl border border-orange-200 bg-orange-50/80 p-4 text-sm font-bold text-orange-900 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-100">
+        Belum ada alokasi tersimpan. Upload dan simpan Excel terlebih dahulu agar grafik kabupaten memakai data nyata.
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <ChartBox title="Progres Harian Kabupaten">
@@ -33,7 +81,7 @@ export function KabupatenCharts() {
 
       <ChartBox title="Target Versus Realisasi">
         <SafeResponsiveContainer className="h-56 w-full">
-          <BarChart data={[{ name: "Kabupaten", target: data.target, selesai: data.completed }]} margin={{ left: -20, right: 8, top: 8 }}>
+          <BarChart data={[{ name: "Kabupaten", target: data.target, selesai: 0 }]} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
             <XAxis dataKey="name" tickLine={false} axisLine={false} />
             <YAxis tickLine={false} axisLine={false} />
@@ -44,7 +92,7 @@ export function KabupatenCharts() {
         </SafeResponsiveContainer>
       </ChartBox>
 
-      <ChartBox title="Progres 8 Kecamatan">
+      <ChartBox title="Progres Kecamatan">
         <SafeResponsiveContainer className="h-56 w-full">
           <BarChart data={data.districtRows} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
@@ -56,14 +104,14 @@ export function KabupatenCharts() {
         </SafeResponsiveContainer>
       </ChartBox>
 
-      <ChartBox title="Progres Per PML">
+      <ChartBox title="Target Per PML">
         <SafeResponsiveContainer className="h-56 w-full">
           <BarChart data={data.pmlRows} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={0} angle={-15} height={58} />
             <YAxis tickLine={false} axisLine={false} />
             <Tooltip />
-            <Bar dataKey="progress" fill="#2563eb" radius={[10, 10, 0, 0]} />
+            <Bar dataKey="target" fill="#2563eb" radius={[10, 10, 0, 0]} />
           </BarChart>
         </SafeResponsiveContainer>
       </ChartBox>
@@ -72,7 +120,7 @@ export function KabupatenCharts() {
         <SafeResponsiveContainer className="h-56 w-full">
           <BarChart data={data.burdenRows} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={0} angle={-15} height={58} />
             <YAxis tickLine={false} axisLine={false} />
             <Tooltip />
             <Bar dataKey="target" fill="#ff7a1a" radius={[10, 10, 0, 0]} />
@@ -107,7 +155,7 @@ export function KabupatenCharts() {
         <SafeResponsiveContainer className="h-56 w-full">
           <BarChart data={data.lowPclRows} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={0} angle={-15} height={58} />
             <YAxis tickLine={false} axisLine={false} />
             <Tooltip />
             <Bar dataKey="progress" fill="#ef4444" radius={[10, 10, 0, 0]} />
@@ -119,7 +167,7 @@ export function KabupatenCharts() {
         <SafeResponsiveContainer className="h-56 w-full">
           <BarChart data={data.highNeedRows} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={0} angle={-15} height={58} />
             <YAxis tickLine={false} axisLine={false} />
             <Tooltip />
             <Bar dataKey="kebutuhan" fill="#8b5cf6" radius={[10, 10, 0, 0]} />
