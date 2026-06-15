@@ -181,8 +181,12 @@ async function getProfile(supabase: Awaited<ReturnType<typeof requireSupabase>>)
   } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Sesi pengguna tidak valid.");
 
-  const { data: profile, error } = await supabase.from("profiles").select("id, role, kecamatan_id, petugas_id").eq("id", user.id).single();
-  if (error || !profile) throw new Error("Profil pengguna belum tersedia.");
+  const { data: profile, error } = await supabase.from("profiles").select("id, role, kecamatan_id, petugas_id").eq("id", user.id).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!profile) {
+    const synced = await syncCurrentUserProfileAction();
+    return { id: synced.id, role: synced.role, kecamatan_id: null, petugas_id: synced.petugas_id };
+  }
   return profile as { id: string; role: string; kecamatan_id: string | null; petugas_id: string | null };
 }
 
@@ -203,10 +207,11 @@ async function getImportActor() {
   } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Sesi pengguna tidak valid.");
 
-  const { data: profile, error } = await supabase.from("profiles").select("id, role").eq("id", user.id).single();
-  if (error || !profile) throw new Error("Profil pengguna belum tersedia.");
-  if (!["admin_kabupaten", "super_admin"].includes(String(profile.role))) throw new Error("Hanya admin yang dapat menyimpan import alokasi.");
-  return { id: user.id, role: String(profile.role) };
+  const { data: profile, error } = await supabase.from("profiles").select("id, role").eq("id", user.id).maybeSingle();
+  if (error) throw new Error(error.message);
+  const safeProfile = profile ?? await syncCurrentUserProfileAction();
+  if (!["admin_kabupaten", "super_admin"].includes(String(safeProfile.role))) throw new Error("Hanya admin yang dapat menyimpan import alokasi.");
+  return { id: user.id, role: String(safeProfile.role) };
 }
 
 function normalizeImportText(value: string) {
