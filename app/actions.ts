@@ -510,8 +510,21 @@ export async function syncCurrentUserProfileAction() {
   if (petugasError) throw new Error(petugasError.message);
   if (!petugas) {
     const metadataRole = typeof user.user_metadata?.role === "string" ? user.user_metadata.role : null;
-    const inferredRole = metadataRole ?? (candidateName.includes("PML") ? "pml" : "pcl");
-    return { id: user.id, nama_lengkap: candidateName || user.email, role: inferredRole, petugas_id: null };
+    const emailLocal = user.email.split("@")[0].toLowerCase();
+    const inferredRole = metadataRole ?? (emailLocal.includes("admin") ? "admin_kabupaten" : emailLocal.includes("pml") ? "pml" : "pcl");
+    const fallbackName = candidateName || user.email;
+    const { error: fallbackProfileError } = await service
+      .from("profiles")
+      .upsert({
+        id: user.id,
+        nama_lengkap: fallbackName,
+        role: inferredRole,
+        petugas_id: null,
+        kecamatan_id: null,
+        aktif: true
+      }, { onConflict: "id" });
+    if (fallbackProfileError) throw new Error(fallbackProfileError.message);
+    return { id: user.id, nama_lengkap: fallbackName, role: inferredRole, petugas_id: null };
   }
 
   const role = petugas.jenis === "PML" ? "pml" : petugas.jenis === "PCL" ? "pcl" : "admin_kabupaten";
