@@ -219,6 +219,16 @@ function normalizeImportText(value: string) {
   return value.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
+function uniqueValues(values: string[]) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function mapBy<T>(items: T[], keyGetter: (item: T) => string) {
+  const map = new Map<string, T>();
+  items.forEach((item) => map.set(keyGetter(item), item));
+  return map;
+}
+
 function resolveImportedPclName(name: string, pml: string, decisions: z.infer<typeof allocationImportSchema>["decisions"]) {
   if (decisions.sugiantoDifferentPcl && name === "SUGIANTO" && pml === "ISMAIL MUNTHE") return "SUGIANTO - TIM ISMAIL MUNTHE";
   if (decisions.sugiantoDifferentPcl && name === "SUGIANTO" && pml === "RAHMAT PAUJI HASIBUAN") return "SUGIANTO - TIM RAHMAT PAUJI HASIBUAN";
@@ -323,76 +333,121 @@ async function importAllocationToSupabase(input: z.input<typeof allocationImport
     const pmlMap = new Map<string, string>();
     const pclMap = new Map<string, string>();
 
-    for (const kecamatan of [...new Set(normalizedRows.map((row) => row.kecamatan))]) {
-      const { data, error } = await service.from("kecamatan").upsert({ nama: kecamatan }, { onConflict: "nama" }).select("id").single();
+    const kecamatanNames = uniqueValues(normalizedRows.map((row) => row.kecamatan));
+    const { data: kecamatanData, error: kecamatanError } = await service
+      .from("kecamatan")
+      .upsert(kecamatanNames.map((nama) => ({ nama })), { onConflict: "nama" })
+      .select("id, nama");
+    if (kecamatanError) throw new Error(kecamatanError.message);
+    kecamatanData?.forEach((item) => kecamatanMap.set(String(item.nama), String(item.id)));
+
+    const desaRows = mapBy(
+      normalizedRows.map((row) => {
+        const kecamatanId = kecamatanMap.get(row.kecamatan);
+        if (!kecamatanId) throw new Error(`Kecamatan tidak ditemukan: ${row.kecamatan}`);
+        return { key: `${row.kecamatan}|${row.desa}`, kecamatan_id: kecamatanId, nama: row.desa };
+      }),
+      (row) => row.key
+    );
+    const { data: desaData, error: desaError } = await service
+      .from("desa")
+      .upsert([...desaRows.values()].map(({ kecamatan_id, nama }) => ({ kecamatan_id, nama })), { onConflict: "kecamatan_id,nama" })
+      .select("id, kecamatan_id, nama");
+    if (desaError) throw new Error(desaError.message);
+    desaData?.forEach((item) => {
+      const kecamatanName = [...kecamatanMap.entries()].find(([, id]) => id === String(item.kecamatan_id))?.[0];
+      if (kecamatanName) desaMap.set(`${kecamatanName}|${item.nama}`, String(item.id));
+    });
+
+    const pmlNames = uniqueValues(normalizedRows.map((row) => row.pml));
+    const pclNames = uniqueValues(normalizedRows.map((row) => row.pcl));
+    const { data: existingPml, error: existingPmlError } = await service
+      .from("petugas")
+      .select("id, nama")
+      .eq("jenis", "PML")
+      .in("nama", pmlNames);
+    if (existingPmlError) throw new Error(existingPmlError.message);
+    existingPml?.forEach((item) => pmlMap.set(String(item.nama), String(item.id)));
+
+    const { data: existingPcl, error: existingPclError } = await service
+      .from("petugas")
+      .select("id, nama")
+      .eq("jenis", "PCL")
+      .in("nama", pclNames);
+    if (existingPclError) throw new Error(existingPclError.message);
+    existingPcl?.forEach((item) => pclMap.set(String(item.nama), String(item.id)));
+
+    const missingPml = pmlNames.filter((nama) => !pmlMap.has(nama));
+    if (missingPml.length) {
+      const { data, error } = await service
+        .from("petugas")
+        .insert(missingPml.map((nama) => ({ nama, jenis: "PML", kecamatan_id: kecamatanMap.get(normalizedRows.find((row) => row.pml === nama)?.kecamatan ?? "") ?? null, aktif: true })))
+        .select("id, nama");
       if (error) throw new Error(error.message);
-      kecamatanMap.set(kecamatan, data.id as string);
+      data?.forEach((item) => pmlMap.set(String(item.nama), String(item.id)));
     }
 
-    for (const row of normalizedRows) {
+    const missingPcl = pclNames.filter((nama) => !pclMap.has(nama));
+    if (missingPcl.length) {
+      const { data, error } = await service
+        .from("petugas")
+        .insert(missingPcl.map((nama) => ({ nama, jenis: "PCL", kecamatan_id: kecamatanMap.get(normalizedRows.find((row) => row.pcl === nama)?.kecamatan ?? "") ?? null, aktif: true })))
+        .select("id, nama");
+      if (error) throw new Error(error.message);
+      data?.forEach((item) => pclMap.set(String(item.nama), String(item.id)));
+    }
+
+    const slsPayload = normalizedRows.map((row) => {
       const kecamatanId = kecamatanMap.get(row.kecamatan);
       if (!kecamatanId) throw new Error(`Kecamatan tidak ditemukan: ${row.kecamatan}`);
-
-      const desaKey = `${row.kecamatan}|${row.desa}`;
-      if (!desaMap.has(desaKey)) {
-        const { data, error } = await service
-          .from("desa")
-          .upsert({ kecamatan_id: kecamatanId, nama: row.desa }, { onConflict: "kecamatan_id,nama" })
-          .select("id")
-          .single();
-        if (error) throw new Error(error.message);
-        desaMap.set(desaKey, data.id as string);
-      }
-
-      if (!pmlMap.has(row.pml)) {
-        pmlMap.set(row.pml, await findOrCreatePetugas(service, row.pml, "PML", kecamatanId));
-      }
-      const pclKey = `${row.pcl}|${row.pml}`;
-      if (!pclMap.has(pclKey)) {
-        pclMap.set(pclKey, await findOrCreatePetugas(service, row.pcl, "PCL", kecamatanId));
-      }
-    }
-
-    for (const row of normalizedRows) {
       const desaId = desaMap.get(`${row.kecamatan}|${row.desa}`);
-      const pmlId = pmlMap.get(row.pml);
-      const pclId = pclMap.get(`${row.pcl}|${row.pml}`);
-      if (!desaId || !pmlId || !pclId) throw new Error(`Referensi import tidak lengkap untuk ID ${row.idSubSls}`);
+      if (!desaId) throw new Error(`Desa tidak ditemukan: ${row.kecamatan} - ${row.desa}`);
+      return {
+        desa_id: desaId,
+        nama_sls: row.namaSls,
+        kode_sub_sls: row.kodeSubSls,
+        id_sub_sls: row.idSubSls,
+        target_awal: row.targetAwal,
+        target_aktual: row.targetAwal,
+        flag_pbi: row.flagPbi,
+        kk_open_pbi: row.kkOpenPbi
+      };
+    });
+    const { data: slsData, error: slsError } = await service
+      .from("sls")
+      .upsert(slsPayload, { onConflict: "id_sub_sls" })
+      .select("id, id_sub_sls");
+    if (slsError) throw new Error(slsError.message);
+    slsData?.forEach((item) => slsMap.set(String(item.id_sub_sls), String(item.id)));
 
-      const { data: sls, error: slsError } = await service
-        .from("sls")
-        .upsert({
-          desa_id: desaId,
-          nama_sls: row.namaSls,
-          kode_sub_sls: row.kodeSubSls,
-          id_sub_sls: row.idSubSls,
-          target_awal: row.targetAwal,
-          target_aktual: row.targetAwal,
-          flag_pbi: row.flagPbi,
-          kk_open_pbi: row.kkOpenPbi
-        }, { onConflict: "id_sub_sls" })
-        .select("id")
-        .single();
-      if (slsError) throw new Error(slsError.message);
-      slsMap.set(row.idSubSls, sls.id as string);
+    const relationRows = mapBy(
+      normalizedRows.map((row) => {
+        const pmlId = pmlMap.get(row.pml);
+        const pclId = pclMap.get(row.pcl);
+        if (!pmlId || !pclId) throw new Error(`Petugas import tidak lengkap untuk ID ${row.idSubSls}`);
+        return { key: `${kegiatanId}|${pclId}|true`, kegiatan_id: kegiatanId, pml_id: pmlId, pcl_id: pclId, aktif: true };
+      }),
+      (row) => row.key
+    );
+    const { error: relationError } = await service
+      .from("hubungan_pml_pcl")
+      .upsert([...relationRows.values()].map(({ kegiatan_id, pml_id, pcl_id, aktif }) => ({ kegiatan_id, pml_id, pcl_id, aktif })), { onConflict: "kegiatan_id,pcl_id,aktif" });
+    if (relationError) throw new Error(relationError.message);
 
-      const { error: relationError } = await service
-        .from("hubungan_pml_pcl")
-        .upsert({ kegiatan_id: kegiatanId, pml_id: pmlId, pcl_id: pclId, aktif: true }, { onConflict: "kegiatan_id,pcl_id,aktif" });
-      if (relationError) throw new Error(relationError.message);
-
-      const { error: assignmentError } = await service
-        .from("penugasan")
-        .upsert({
-          kegiatan_id: kegiatanId,
-          sls_id: sls.id,
-          pml_id: pmlId,
-          pcl_id: pclId,
-          target_aktual: row.targetAwal,
-          aktif: true
-        }, { onConflict: "kegiatan_id,sls_id,pcl_id" });
-      if (assignmentError) throw new Error(assignmentError.message);
-    }
+    const assignmentRows = mapBy(
+      normalizedRows.map((row) => {
+        const slsId = slsMap.get(row.idSubSls);
+        const pmlId = pmlMap.get(row.pml);
+        const pclId = pclMap.get(row.pcl);
+        if (!slsId || !pmlId || !pclId) throw new Error(`Referensi penugasan tidak lengkap untuk ID ${row.idSubSls}`);
+        return { key: `${kegiatanId}|${slsId}|${pclId}`, kegiatan_id: kegiatanId, sls_id: slsId, pml_id: pmlId, pcl_id: pclId, target_aktual: row.targetAwal, aktif: true };
+      }),
+      (row) => row.key
+    );
+    const { error: assignmentError } = await service
+      .from("penugasan")
+      .upsert([...assignmentRows.values()].map(({ kegiatan_id, sls_id, pml_id, pcl_id, target_aktual, aktif }) => ({ kegiatan_id, sls_id, pml_id, pcl_id, target_aktual, aktif })), { onConflict: "kegiatan_id,sls_id,pcl_id" });
+    if (assignmentError) throw new Error(assignmentError.message);
 
     const { error: updateBatchError } = await service
       .from("import_batches")
