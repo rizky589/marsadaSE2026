@@ -66,7 +66,11 @@ export function AuthForm({ mode, compact = false }: { mode: "login" | "register"
 
       const targetPath = dashboardPathForRole(profile?.role ?? fallbackRole);
       toast.success(mode === "login" ? "Berhasil masuk" : "Registrasi berhasil");
-      router.push(mode === "login" ? targetPath : "/login");
+      if (mode === "login") {
+        window.location.assign(targetPath);
+        return;
+      }
+      router.replace("/login");
       router.refresh();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Supabase belum dikonfigurasi");
