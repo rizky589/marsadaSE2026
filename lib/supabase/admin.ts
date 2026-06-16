@@ -1,10 +1,25 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
+function cleanEnv(value: string | undefined) {
+  return value?.trim().replace(/^["']|["']$/g, "");
+}
+
+function assertHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") return;
+  } catch {
+    // Fall through to the safe error below.
+  }
+  throw new Error("NEXT_PUBLIC_SUPABASE_URL harus berupa URL Supabase valid, contoh: https://xxxxx.supabase.co");
+}
+
 export function createServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const serviceKey = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
   if (!url || !serviceKey) throw new Error("Server belum dikonfigurasi.");
+  assertHttpUrl(url);
   return createClient(url, serviceKey, {
     auth: {
       autoRefreshToken: false,

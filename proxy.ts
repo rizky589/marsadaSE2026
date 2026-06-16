@@ -1,11 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { dashboardPathForRole } from "@/lib/role-routes";
 
 function isValidHttpUrl(value: string | undefined): value is string {
   if (!value) return false;
   try {
-    const parsed = new URL(value);
+    const parsed = new URL(value.trim().replace(/^["']|["']$/g, ""));
     return parsed.protocol === "https:" || parsed.protocol === "http:";
   } catch {
     return false;
@@ -14,8 +13,13 @@ function isValidHttpUrl(value: string | undefined): value is string {
 
 export async function proxy(request: NextRequest) {
   const response = NextResponse.next({ request });
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const publicRoutes = ["/login", "/register", "/lupa-password", "/reset-password", "/akses-ditolak"];
+  const isAuthRoute = publicRoutes.includes(request.nextUrl.pathname);
+
+  if (isAuthRoute) return response;
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/^["']|["']$/g, "");
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim().replace(/^["']|["']$/g, "");
 
   if (!isValidHttpUrl(url) || !key) return response;
   const supabaseUrl = url;
@@ -34,14 +38,8 @@ export async function proxy(request: NextRequest) {
     data: { user }
   } = await supabase.auth.getUser();
 
-  const publicRoutes = ["/login", "/register", "/lupa-password", "/reset-password", "/akses-ditolak"];
-  const isAuthRoute = publicRoutes.includes(request.nextUrl.pathname);
-  if (!user && !isAuthRoute && !request.nextUrl.pathname.startsWith("/api")) {
+  if (!user && !request.nextUrl.pathname.startsWith("/api")) {
     return NextResponse.redirect(new URL("/login", request.url));
-  }
-  if (user && isAuthRoute) {
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-    return NextResponse.redirect(new URL(dashboardPathForRole(profile?.role ?? "admin_kabupaten"), request.url));
   }
 
   return response;
