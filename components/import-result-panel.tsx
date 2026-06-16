@@ -132,7 +132,7 @@ function Metrics({ items }: { items: { label: string; value: string | number }[]
   return (
     <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {items.map((item) => (
-        <div key={item.label} className="rounded-3xl border border-[var(--border)] bg-white/60 p-4 dark:bg-white/5">
+        <div key={item.label} className="rounded-3xl border border-[var(--border)] bg-white/70 p-4 text-slate-900 dark:bg-slate-900/60 dark:text-slate-50">
           <p className="text-xs font-bold text-slate-500 dark:text-slate-300">{item.label}</p>
           <p className="mt-2 text-2xl font-black">{typeof item.value === "number" ? numberId(item.value) : item.value}</p>
         </div>
@@ -148,7 +148,7 @@ function WilayahView({ rows, summary }: { rows: ImportedRow[]; summary: ReturnTy
       <Metrics items={[{ label: "Kecamatan", value: summary.districtCount }, { label: "Desa/Kelurahan", value: summary.villageCount }, { label: "SLS/Sub-SLS", value: summary.slsCount }, { label: "Total Target", value: summary.target }]} />
       <DataTable heads={["Kecamatan", "Desa/Kelurahan", "SLS", "ID Sub-SLS", "Target"]}>
         {pagination.rows.map((row) => (
-          <tr key={row.idSubSls} className="border-t border-[var(--border)]">
+          <tr key={row.idSubSls} className="border-t border-[var(--border)] text-slate-800 transition hover:bg-orange-50/70 dark:text-slate-100 dark:hover:bg-white/5">
             <td className="px-4 py-3">{titleCase(row.kecamatan)}</td>
             <td className="px-4 py-3">{titleCase(row.desa)}</td>
             <td className="px-4 py-3 font-bold">{titleCase(row.namaSls)}</td>
@@ -173,7 +173,7 @@ function PetugasView({ summary }: { summary: ReturnType<typeof buildSummary> }) 
       <Metrics items={[{ label: "PML", value: summary.pmlRows.length }, { label: "PCL", value: summary.pclRows.length }, { label: "Akun Terhubung", value: "0" }, { label: "Perlu Dibuatkan Akun", value: summary.pmlRows.length + summary.pclRows.length }]} />
       <DataTable heads={["Role", "Nama Petugas", "PML Pembina", "Jumlah SLS", "Target", "Akun"]}>
         {pagination.rows.map((row) => (
-          <tr key={`${row.role}-${row.name}-${row.pml}`} className="border-t border-[var(--border)]">
+          <tr key={`${row.role}-${row.name}-${row.pml}`} className="border-t border-[var(--border)] text-slate-800 transition hover:bg-orange-50/70 dark:text-slate-100 dark:hover:bg-white/5">
             <td className="px-4 py-3"><Badge>{row.role === "PML" ? "Diproses" : "Aman"}</Badge></td>
             <td className="px-4 py-3 font-bold">{titleCase(row.name)}</td>
             <td className="px-4 py-3">{row.pml === "-" ? "-" : titleCase(row.pml)}</td>
@@ -195,7 +195,7 @@ function HubunganView({ summary }: { summary: ReturnType<typeof buildSummary> })
       <Metrics items={[{ label: "Relasi PML-PCL", value: summary.relationRows.length }, { label: "PML", value: summary.pmlRows.length }, { label: "PCL", value: summary.pclRows.length }, { label: "Konflik Aktif", value: 0 }]} />
       <DataTable heads={["PML", "PCL Bawahan", "Jumlah SLS", "Target Tim PCL", "Status"]}>
         {pagination.rows.map((row) => (
-          <tr key={`${row.pml}-${row.pcl}`} className="border-t border-[var(--border)]">
+          <tr key={`${row.pml}-${row.pcl}`} className="border-t border-[var(--border)] text-slate-800 transition hover:bg-orange-50/70 dark:text-slate-100 dark:hover:bg-white/5">
             <td className="px-4 py-3 font-bold">{titleCase(row.pml)}</td>
             <td className="px-4 py-3">{titleCase(row.pcl)}</td>
             <td className="px-4 py-3">{numberId(row.sls)}</td>
@@ -216,7 +216,7 @@ function PenugasanView({ rows }: { rows: ImportedRow[] }) {
       <Metrics items={[{ label: "Penugasan Aktif", value: rows.length }, { label: "Baris Muatan 0", value: "Tidak aktif" }, { label: "Status Import", value: "Tersimpan" }, { label: "Sumber", value: "Excel" }]} />
       <DataTable heads={["Kecamatan", "Desa", "SLS/Sub-SLS", "ID Sub-SLS", "Target", "PML", "PCL"]}>
         {pagination.rows.map((row) => (
-          <tr key={row.idSubSls} className="border-t border-[var(--border)]">
+          <tr key={row.idSubSls} className="border-t border-[var(--border)] text-slate-800 transition hover:bg-orange-50/70 dark:text-slate-100 dark:hover:bg-white/5">
             <td className="px-4 py-3">{titleCase(row.kecamatan)}</td>
             <td className="px-4 py-3">{titleCase(row.desa)}</td>
             <td className="px-4 py-3 font-bold">{titleCase(row.namaSls)} / {row.kodeSubSls}</td>
@@ -234,9 +234,9 @@ function PenugasanView({ rows }: { rows: ImportedRow[] }) {
 
 function DataTable({ heads, children }: { heads: string[]; children: React.ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-3xl border border-[var(--border)]">
-      <table className="w-full min-w-[900px] text-left text-sm">
-        <thead className="bg-slate-100/80 text-xs uppercase text-slate-500 dark:bg-white/5 dark:text-slate-300">
+    <div className="overflow-x-auto rounded-3xl border border-[var(--border)] bg-white/60 dark:bg-slate-950/30">
+      <table className="w-full min-w-[900px] text-left text-sm text-slate-800 dark:text-slate-100">
+        <thead className="bg-slate-100/90 text-xs uppercase text-slate-600 dark:bg-slate-900/80 dark:text-slate-200">
           <tr>{heads.map((head) => <th key={head} className="px-4 py-3 font-black">{head}</th>)}</tr>
         </thead>
         <tbody>{children}</tbody>
@@ -256,8 +256,8 @@ function usePagination<T>(rows: T[]) {
 function PaginationControls({ page, totalPages, totalRows, onPageChange }: { page: number; totalPages: number; totalRows: number; onPageChange: (page: number) => void }) {
   const pages = Array.from({ length: totalPages }, (_, index) => index + 1).filter((item) => item === 1 || item === totalPages || Math.abs(item - page) <= 1);
   return (
-    <div className="flex flex-col gap-3 rounded-3xl border border-[var(--border)] bg-white/60 p-3 text-sm dark:bg-white/5 sm:flex-row sm:items-center sm:justify-between">
-      <p className="font-bold text-slate-500 dark:text-slate-300">Halaman {page} dari {totalPages} • {numberId(totalRows)} baris</p>
+    <div className="flex flex-col gap-3 rounded-3xl border border-[var(--border)] bg-white/70 p-3 text-sm text-slate-800 dark:bg-slate-900/60 dark:text-slate-100 sm:flex-row sm:items-center sm:justify-between">
+      <p className="font-bold text-slate-600 dark:text-slate-300">Halaman {page} dari {totalPages} - {numberId(totalRows)} baris</p>
       <div className="flex flex-wrap gap-2">
         <Button variant="secondary" size="sm" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>Sebelumnya</Button>
         {pages.map((item, index) => (
