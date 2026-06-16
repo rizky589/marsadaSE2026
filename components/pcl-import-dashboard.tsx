@@ -24,6 +24,15 @@ type StoredImport = {
 };
 
 const importedAllocationsStorageKey = "marsada-imported-allocations";
+const dailyReportsStorageKey = "marsada-daily-reports";
+
+type StoredDailyReport = {
+  assignmentId: string;
+  subSlsId: string;
+  reportDate: string;
+  completedToday: number;
+  status: "draft" | "dikirim" | "dikembalikan" | "disetujui";
+};
 
 function normalize(value: string) {
   return value.trim().replace(/\s+/g, " ").toUpperCase();
@@ -40,6 +49,7 @@ function titleCase(value: string) {
 export function PclImportDashboard() {
   const [pclName, setPclName] = useState("PCL");
   const [rows, setRows] = useState<ImportedRow[]>([]);
+  const [reports, setReports] = useState<StoredDailyReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -81,12 +91,33 @@ export function PclImportDashboard() {
 
       setPclName(titleCase(ownedRows[0]?.pcl || name || "PCL"));
       setRows(ownedRows);
+      const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
+      if (savedReports) {
+        try {
+          setReports(JSON.parse(savedReports) as StoredDailyReport[]);
+        } catch {
+          window.localStorage.removeItem(dailyReportsStorageKey);
+        }
+      }
       setIsLoading(false);
     }
     load();
   }, []);
 
   const target = useMemo(() => rows.reduce((sum, row) => sum + row.targetAwal, 0), [rows]);
+  const approvedReports = useMemo(() => reports.filter((report) => report.status === "disetujui"), [reports]);
+  const completedBySubSls = useMemo(() => {
+    const map = new Map<string, number>();
+    approvedReports.forEach((report) => {
+      map.set(report.subSlsId, (map.get(report.subSlsId) ?? 0) + report.completedToday);
+    });
+    return map;
+  }, [approvedReports]);
+  const completed = useMemo(() => rows.reduce((sum, row) => sum + (completedBySubSls.get(row.idSubSls) ?? 0), 0), [completedBySubSls, rows]);
+  const today = new Date().toISOString().slice(0, 10);
+  const todayDone = useMemo(() => approvedReports.filter((report) => report.reportDate === today).reduce((sum, report) => sum + report.completedToday, 0), [approvedReports, today]);
+  const remaining = Math.max(0, target - completed);
+  const progressValue = pct(completed, target);
 
   if (!rows.length) {
     return (
@@ -115,9 +146,9 @@ export function PclImportDashboard() {
         <div className="mt-5 space-y-2">
           <div className="flex justify-between text-sm font-bold">
             <span>Progres Saya</span>
-            <span>0%</span>
+            <span>{progressValue}%</span>
           </div>
-          <Progress value={0} />
+          <Progress value={progressValue} />
         </div>
       </section>
 
@@ -125,12 +156,12 @@ export function PclImportDashboard() {
         {[
           ["Target Saya", numberId(target)],
           ["SLS/Sub-SLS", numberId(rows.length)],
-          ["Selesai", "0"],
-          ["Sisa", numberId(target)],
-          ["Progres", "0%"],
-          ["Hasil Hari Ini", "0"],
-          ["Kebutuhan per Hari", numberId(Math.ceil(target / 57))],
-          ["Status Progres", "Belum ada laporan"]
+          ["Selesai", numberId(completed)],
+          ["Sisa", numberId(remaining)],
+          ["Progres", `${progressValue}%`],
+          ["Hasil Hari Ini", numberId(todayDone)],
+          ["Kebutuhan per Hari", numberId(Math.ceil(remaining / 57))],
+          ["Status Progres", completed > 0 ? "Berjalan" : "Belum ada laporan"]
         ].map(([label, value]) => (
           <Card key={label}>
             <CardHeader className="p-4">
@@ -149,19 +180,30 @@ export function PclImportDashboard() {
         <CardContent className="space-y-3">
           {rows.map((row) => (
             <article key={row.idSubSls} className="rounded-3xl border border-[var(--border)] bg-white/55 p-4 dark:bg-white/5">
+              {(() => {
+                const rowCompleted = completedBySubSls.get(row.idSubSls) ?? 0;
+                const rowRemaining = Math.max(0, row.targetAwal - rowCompleted);
+                const rowProgress = pct(rowCompleted, row.targetAwal);
+                return (
+                  <>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-black">{titleCase(row.desa)}</p>
                   <p className="text-sm text-slate-500">SLS {titleCase(row.namaSls)} / {row.kodeSubSls} - {row.idSubSls}</p>
                 </div>
-                <Badge>draft</Badge>
+                <Badge>{rowCompleted > 0 ? "disetujui" : "draft"}</Badge>
               </div>
               <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 <Metric label="Kecamatan" value={titleCase(row.kecamatan)} />
                 <Metric label="PML" value={titleCase(row.pml)} />
                 <Metric label="Target" value={numberId(row.targetAwal)} />
-                <Metric label="Progres" value={`${pct(0, row.targetAwal)}%`} />
+                <Metric label="Selesai" value={numberId(rowCompleted)} />
+                <Metric label="Sisa" value={numberId(rowRemaining)} />
+                <Metric label="Progres" value={`${rowProgress}%`} />
               </div>
+                  </>
+                );
+              })()}
             </article>
           ))}
         </CardContent>

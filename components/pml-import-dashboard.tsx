@@ -28,6 +28,16 @@ type ProfileRecord = {
 };
 
 const storageKey = "marsada-imported-allocations";
+const dailyReportsStorageKey = "marsada-daily-reports";
+
+type StoredDailyReport = {
+  subSlsId: string;
+  reportDate: string;
+  pml: string;
+  pcl: string;
+  completedToday: number;
+  status: "draft" | "dikirim" | "dikembalikan" | "disetujui";
+};
 
 function normalize(value: string) {
   return value.trim().replace(/\s+/g, " ").toUpperCase();
@@ -49,6 +59,7 @@ function resolvePclName(name: string, pml: string) {
 
 export function PmlImportDashboard() {
   const [rows, setRows] = useState<ImportedRow[]>([]);
+  const [reports, setReports] = useState<StoredDailyReport[]>([]);
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
 
   useEffect(() => {
@@ -66,12 +77,22 @@ export function PmlImportDashboard() {
       }
 
       const saved = window.localStorage.getItem(storageKey);
-      if (!saved) return;
-      try {
-        const parsed = JSON.parse(saved) as StoredImport;
-        setRows((parsed.rows ?? []).filter((row) => row.idSubSls && row.targetAwal > 0));
-      } catch {
-        window.localStorage.removeItem(storageKey);
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as StoredImport;
+          setRows((parsed.rows ?? []).filter((row) => row.idSubSls && row.targetAwal > 0));
+        } catch {
+          window.localStorage.removeItem(storageKey);
+        }
+      }
+
+      const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
+      if (savedReports) {
+        try {
+          setReports(JSON.parse(savedReports) as StoredDailyReport[]);
+        } catch {
+          window.localStorage.removeItem(dailyReportsStorageKey);
+        }
       }
     }
     load();
@@ -83,35 +104,52 @@ export function PmlImportDashboard() {
     return rows.filter((row) => normalize(row.pml) === pmlName);
   }, [profile, rows]);
 
+  const approvedReports = useMemo(() => reports.filter((report) => report.status === "disetujui"), [reports]);
+  const completedBySubSls = useMemo(() => {
+    const map = new Map<string, number>();
+    approvedReports.forEach((report) => {
+      map.set(report.subSlsId, (map.get(report.subSlsId) ?? 0) + report.completedToday);
+    });
+    return map;
+  }, [approvedReports]);
+  const pendingReports = useMemo(() => reports.filter((report) => report.status === "dikirim").length, [reports]);
+  const today = new Date().toISOString().slice(0, 10);
+  const activeToday = useMemo(() => new Set(reports.filter((report) => report.reportDate === today).map((report) => normalize(report.pcl))).size, [reports, today]);
+
   const pmlRows = useMemo(() => {
-    const map = new Map<string, { name: string; pcls: Set<string>; sls: number; target: number; villages: Set<string> }>();
+    const map = new Map<string, { name: string; pcls: Set<string>; sls: number; target: number; completed: number; villages: Set<string> }>();
     visibleRows.forEach((row) => {
       const key = normalize(row.pml);
-      const current = map.get(key) ?? { name: row.pml, pcls: new Set<string>(), sls: 0, target: 0, villages: new Set<string>() };
+      const current = map.get(key) ?? { name: row.pml, pcls: new Set<string>(), sls: 0, target: 0, completed: 0, villages: new Set<string>() };
       current.pcls.add(resolvePclName(normalize(row.pcl), normalize(row.pml)));
       current.villages.add(`${normalize(row.kecamatan)}|${normalize(row.desa)}`);
       current.sls += 1;
       current.target += row.targetAwal;
+      current.completed += completedBySubSls.get(row.idSubSls) ?? 0;
       map.set(key, current);
     });
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "id"));
-  }, [visibleRows]);
+  }, [completedBySubSls, visibleRows]);
 
   const pclRows = useMemo(() => {
-    const map = new Map<string, { pml: string; name: string; sls: number; target: number; villages: Set<string> }>();
+    const map = new Map<string, { pml: string; name: string; sls: number; target: number; completed: number; villages: Set<string> }>();
     visibleRows.forEach((row) => {
       const resolvedPcl = resolvePclName(normalize(row.pcl), normalize(row.pml));
       const key = `${normalize(row.pml)}|${resolvedPcl}`;
-      const current = map.get(key) ?? { pml: row.pml, name: resolvedPcl, sls: 0, target: 0, villages: new Set<string>() };
+      const current = map.get(key) ?? { pml: row.pml, name: resolvedPcl, sls: 0, target: 0, completed: 0, villages: new Set<string>() };
       current.sls += 1;
       current.target += row.targetAwal;
+      current.completed += completedBySubSls.get(row.idSubSls) ?? 0;
       current.villages.add(`${normalize(row.kecamatan)}|${normalize(row.desa)}`);
       map.set(key, current);
     });
     return [...map.values()].sort((a, b) => a.pml.localeCompare(b.pml, "id") || a.name.localeCompare(b.name, "id"));
-  }, [visibleRows]);
+  }, [completedBySubSls, visibleRows]);
 
   const totalTarget = pmlRows.reduce((sum, row) => sum + row.target, 0);
+  const totalCompleted = pmlRows.reduce((sum, row) => sum + row.completed, 0);
+  const totalRemaining = Math.max(0, totalTarget - totalCompleted);
+  const teamProgress = pct(totalCompleted, totalTarget);
   const totalPcl = new Set(pclRows.map((row) => `${normalize(row.pml)}|${normalize(row.name)}`)).size;
   const totalSls = visibleRows.length;
 
@@ -135,9 +173,9 @@ export function PmlImportDashboard() {
         <div className="mt-5 space-y-2">
           <div className="flex justify-between text-sm font-bold">
             <span>Progres Tim</span>
-            <span>0%</span>
+            <span>{teamProgress}%</span>
           </div>
-          <Progress value={0} />
+          <Progress value={teamProgress} />
         </div>
       </section>
 
@@ -147,11 +185,11 @@ export function PmlImportDashboard() {
           ["Jumlah PCL Bawahan", numberId(totalPcl)],
           ["Jumlah SLS", numberId(totalSls)],
           ["Target Tim", numberId(totalTarget)],
-          ["Selesai", "0"],
-          ["Sisa", numberId(totalTarget)],
-          ["Progres Tim", "0%"],
-          ["PCL Aktif Hari Ini", "0"],
-          ["Menunggu Pemeriksaan", "0"],
+          ["Selesai", numberId(totalCompleted)],
+          ["Sisa", numberId(totalRemaining)],
+          ["Progres Tim", `${teamProgress}%`],
+          ["PCL Aktif Hari Ini", numberId(activeToday)],
+          ["Menunggu Pemeriksaan", numberId(pendingReports)],
           ["Kendala Aktif", "0"]
         ].map(([label, value]) => (
           <Card key={label}>
@@ -182,14 +220,14 @@ export function PmlImportDashboard() {
                     <td className="px-4 py-4">{numberId(row.villages.size)}</td>
                     <td className="px-4 py-4">{numberId(row.sls)}</td>
                     <td className="px-4 py-4">{numberId(row.target)}</td>
-                    <td className="px-4 py-4">0</td>
+                    <td className="px-4 py-4">{numberId(row.completed)}</td>
                     <td className="px-4 py-4">
                       <div className="min-w-32 space-y-2">
-                        <div className="text-xs font-bold">{pct(0, row.target)}%</div>
-                        <Progress value={0} />
+                        <div className="text-xs font-bold">{pct(row.completed, row.target)}%</div>
+                        <Progress value={pct(row.completed, row.target)} />
                       </div>
                     </td>
-                    <td className="px-4 py-4"><Badge>Belum ada laporan</Badge></td>
+                    <td className="px-4 py-4"><Badge>{row.completed > 0 ? "disetujui" : "Belum ada laporan"}</Badge></td>
                   </tr>
                 ))}
               </tbody>
@@ -217,16 +255,16 @@ export function PmlImportDashboard() {
                     <td className="px-4 py-4">{numberId(row.villages.size)}</td>
                     <td className="px-4 py-4">{numberId(row.sls)}</td>
                     <td className="px-4 py-4">{numberId(row.target)}</td>
-                    <td className="px-4 py-4">0</td>
-                    <td className="px-4 py-4">{numberId(row.target)}</td>
+                    <td className="px-4 py-4">{numberId(row.completed)}</td>
+                    <td className="px-4 py-4">{numberId(Math.max(0, row.target - row.completed))}</td>
                     <td className="px-4 py-4">
                       <div className="min-w-32 space-y-2">
-                        <div className="text-xs font-bold">{pct(0, row.target)}%</div>
-                        <Progress value={0} />
+                        <div className="text-xs font-bold">{pct(row.completed, row.target)}%</div>
+                        <Progress value={pct(row.completed, row.target)} />
                       </div>
                     </td>
-                    <td className="px-4 py-4">{numberId(Math.ceil(row.target / 57))}</td>
-                    <td className="px-4 py-4"><Badge>Belum ada laporan</Badge></td>
+                    <td className="px-4 py-4">{numberId(Math.ceil(Math.max(0, row.target - row.completed) / 57))}</td>
+                    <td className="px-4 py-4"><Badge>{row.completed > 0 ? "disetujui" : "Belum ada laporan"}</Badge></td>
                   </tr>
                 ))}
               </tbody>
