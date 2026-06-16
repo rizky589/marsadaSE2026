@@ -4,9 +4,19 @@ import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, Tooltip, XAxis, YAxis } from "recharts";
 import { SafeResponsiveContainer } from "@/components/safe-responsive-container";
 import { loadImportedAllocations, normalizeName, resolvePclName, titleCase, type ImportedAllocationRow } from "@/lib/imported-allocations";
+import { pct } from "@/lib/utils";
 
 const colors = ["#2563eb", "#ff7a1a", "#10b981", "#ef4444", "#64748b", "#8b5cf6"];
 const axisTick = { fill: "currentColor", fontSize: 12 };
+const dailyReportsStorageKey = "marsada-daily-reports";
+
+type StoredDailyReport = {
+  subSlsId: string;
+  reportDate: string;
+  pcl: string;
+  completedToday: number;
+  status: "draft" | "dikirim" | "dikembalikan" | "disetujui";
+};
 
 function ChartBox({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -17,37 +27,63 @@ function ChartBox({ title, children }: { title: string; children: React.ReactNod
   );
 }
 
-function groupTargets(rows: ImportedAllocationRow[], keyFn: (row: ImportedAllocationRow) => string) {
-  const map = new Map<string, number>();
+function groupTargets(rows: ImportedAllocationRow[], completedBySubSls: Map<string, number>, keyFn: (row: ImportedAllocationRow) => string) {
+  const map = new Map<string, { target: number; selesai: number }>();
   rows.forEach((row) => {
     const key = keyFn(row);
-    map.set(key, (map.get(key) ?? 0) + row.targetAwal);
+    const current = map.get(key) ?? { target: 0, selesai: 0 };
+    current.target += row.targetAwal;
+    current.selesai += completedBySubSls.get(row.idSubSls) ?? 0;
+    map.set(key, current);
   });
-  return [...map.entries()].map(([name, target]) => ({ name, target, selesai: 0, progress: 0 }));
+  return [...map.entries()].map(([name, value]) => ({ name, target: value.target, selesai: value.selesai, progress: pct(value.selesai, value.target) }));
 }
 
 export function KabupatenCharts() {
   const [rows, setRows] = useState<ImportedAllocationRow[]>([]);
+  const [reports, setReports] = useState<StoredDailyReport[]>([]);
 
   useEffect(() => {
     setRows(loadImportedAllocations());
+    const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
+    if (savedReports) {
+      try {
+        setReports(JSON.parse(savedReports) as StoredDailyReport[]);
+      } catch {
+        window.localStorage.removeItem(dailyReportsStorageKey);
+      }
+    }
   }, []);
 
   const data = useMemo(() => {
     const target = rows.reduce((sum, row) => sum + row.targetAwal, 0);
-    const districtRows = groupTargets(rows, (row) => titleCase(row.kecamatan));
-    const pmlRows = groupTargets(rows, (row) => titleCase(row.pml));
-    const burdenRows = groupTargets(rows, (row) => titleCase(resolvePclName(row.pcl, row.pml))).sort((a, b) => b.target - a.target).slice(0, 20);
-    const lowPclRows = burdenRows.map((row) => ({ name: row.name, progress: 0 }));
-    const highNeedRows = burdenRows.map((row) => ({ name: row.name, kebutuhan: Math.ceil(row.target / 57) })).sort((a, b) => b.kebutuhan - a.kebutuhan).slice(0, 20);
+    const approvedReports = reports.filter((report) => report.status === "disetujui");
+    const completed = approvedReports.reduce((sum, report) => sum + report.completedToday, 0);
+    const completedBySubSls = new Map<string, number>();
+    approvedReports.forEach((report) => {
+      completedBySubSls.set(report.subSlsId, (completedBySubSls.get(report.subSlsId) ?? 0) + report.completedToday);
+    });
+    const districtRows = groupTargets(rows, completedBySubSls, (row) => titleCase(row.kecamatan));
+    const pmlRows = groupTargets(rows, completedBySubSls, (row) => titleCase(row.pml));
+    const burdenRows = groupTargets(rows, completedBySubSls, (row) => titleCase(resolvePclName(row.pcl, row.pml))).sort((a, b) => b.target - a.target).slice(0, 20);
+    const lowPclRows = [...burdenRows].sort((a, b) => a.progress - b.progress).slice(0, 20);
+    const highNeedRows = burdenRows.map((row) => ({ name: row.name, kebutuhan: Math.ceil(Math.max(0, row.target - row.selesai) / 57) })).sort((a, b) => b.kebutuhan - a.kebutuhan).slice(0, 20);
+    const statuses = ["draft", "dikirim", "dikembalikan", "disetujui"] as const;
     const statusRows = [
-      { status: "draft", jumlah: 0 },
-      { status: "dikirim", jumlah: 0 },
-      { status: "dikembalikan", jumlah: 0 },
-      { status: "disetujui", jumlah: 0 },
+      ...statuses.map((status) => ({ status, jumlah: reports.filter((report) => report.status === status).length })),
       { status: "dibuka_kembali", jumlah: 0 }
     ];
-    const productivityRows = ["Hari 1", "Hari 2", "Hari 3", "Hari 4", "Hari 5", "Hari 6", "Hari 7"].map((day) => ({ day, selesai: 0 }));
+    const dailyMap = new Map<string, number>();
+    approvedReports.forEach((report) => {
+      dailyMap.set(report.reportDate, (dailyMap.get(report.reportDate) ?? 0) + report.completedToday);
+    });
+    const productivityRows = [...dailyMap.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-7)
+      .map(([day, selesai]) => ({ day, selesai }));
+    if (!productivityRows.length) {
+      productivityRows.push(...["Hari 1", "Hari 2", "Hari 3", "Hari 4", "Hari 5", "Hari 6", "Hari 7"].map((day) => ({ day, selesai: 0 })));
+    }
     const issueRows = [
       { category: "Rendah", jumlah: 0 },
       { category: "Sedang", jumlah: 0 },
@@ -55,8 +91,8 @@ export function KabupatenCharts() {
       { category: "Kritis", jumlah: 0 }
     ];
 
-    return { target, districtRows, pmlRows, burdenRows, lowPclRows, highNeedRows, statusRows, productivityRows, issueRows };
-  }, [rows]);
+    return { target, completed, districtRows, pmlRows, burdenRows, lowPclRows, highNeedRows, statusRows, productivityRows, issueRows };
+  }, [reports, rows]);
 
   if (!rows.length) {
     return (
@@ -82,7 +118,7 @@ export function KabupatenCharts() {
 
       <ChartBox title="Target Versus Realisasi">
         <SafeResponsiveContainer className="h-56 w-full">
-          <BarChart data={[{ name: "Kabupaten", target: data.target, selesai: 0 }]} margin={{ left: -20, right: 8, top: 8 }}>
+          <BarChart data={[{ name: "Kabupaten", target: data.target, selesai: data.completed }]} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
             <XAxis dataKey="name" tickLine={false} axisLine={false} tick={axisTick} />
             <YAxis tickLine={false} axisLine={false} tick={axisTick} />
