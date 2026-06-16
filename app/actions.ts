@@ -500,7 +500,7 @@ export async function syncCurrentUserProfileAction() {
   if (userError || !user?.email) throw new Error("Sesi pengguna tidak valid.");
 
   const { data: existing } = await supabase.from("profiles").select("id, nama_lengkap, role, petugas_id").eq("id", user.id).maybeSingle();
-  if (existing?.role && (existing.petugas_id || ["admin_kabupaten", "super_admin", "pimpinan"].includes(String(existing.role)))) {
+  if (existing?.role) {
     return existing as { id: string; nama_lengkap: string | null; role: string; petugas_id: string | null };
   }
 
