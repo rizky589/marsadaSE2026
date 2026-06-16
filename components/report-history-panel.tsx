@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { numberId } from "@/lib/utils";
 
@@ -27,6 +28,7 @@ type StoredDailyReport = {
 
 const importedAllocationsStorageKey = "marsada-imported-allocations";
 const dailyReportsStorageKey = "marsada-daily-reports";
+const editReportStorageKey = "marsada-edit-report";
 
 function normalize(value: string) {
   return value.trim().replace(/\s+/g, " ").toUpperCase();
@@ -43,6 +45,7 @@ function titleCase(value: string) {
 export function ReportHistoryPanel() {
   const [hasImportAssignments, setHasImportAssignments] = useState(false);
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
+  const [pclName, setPclName] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -56,6 +59,7 @@ export function ReportHistoryPanel() {
       }
       const saved = window.localStorage.getItem(importedAllocationsStorageKey);
       if (!saved || !pclName) return;
+      setPclName(pclName);
       const parsed = JSON.parse(saved) as { rows?: ImportedRow[] };
       setHasImportAssignments(Boolean((parsed.rows ?? []).some((row) => row.idSubSls && row.targetAwal > 0 && normalize(row.pcl) === pclName)));
 
@@ -67,6 +71,19 @@ export function ReportHistoryPanel() {
     }
     load();
   }, []);
+
+  function updateReportStatus(reportId: string, status: "dikirim") {
+    const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
+    const allReports = savedReports ? JSON.parse(savedReports) as StoredDailyReport[] : [];
+    const nextReports = allReports.map((report) => report.id === reportId ? { ...report, status, updatedAt: new Date().toISOString() } : report);
+    window.localStorage.setItem(dailyReportsStorageKey, JSON.stringify(nextReports));
+    setReports(nextReports.filter((report) => normalize(report.pcl) === pclName));
+  }
+
+  function editReport(report: StoredDailyReport) {
+    window.localStorage.setItem(editReportStorageKey, JSON.stringify(report));
+    window.location.reload();
+  }
 
   if (reports.length) {
     return (
@@ -90,6 +107,12 @@ export function ReportHistoryPanel() {
                 <Metric label="Mulai" value={report.startTime} />
                 <Metric label="Selesai Jam" value={report.endTime} />
               </div>
+              {report.status === "draft" || report.status === "dikembalikan" ? (
+                <div className="mt-4 flex flex-wrap justify-end gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => editReport(report)}>Edit</Button>
+                  <Button size="sm" onClick={() => updateReportStatus(report.id, "dikirim")}>Kirim ke PML</Button>
+                </div>
+              ) : null}
             </article>
           ))}
         </div>

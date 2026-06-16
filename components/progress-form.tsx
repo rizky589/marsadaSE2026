@@ -96,6 +96,7 @@ type ImportedRow = {
 
 const importedAllocationsStorageKey = "marsada-imported-allocations";
 const dailyReportsStorageKey = "marsada-daily-reports";
+const editReportStorageKey = "marsada-edit-report";
 
 type StoredDailyReport = {
   id: string;
@@ -202,7 +203,40 @@ export function ProgressForm() {
       }
 
       setImportAssignments(rows);
-      if (rows[0]) form.setValue("assignmentId", rows[0].id);
+      const editSaved = window.localStorage.getItem(editReportStorageKey);
+      if (editSaved) {
+        try {
+          const editReport = JSON.parse(editSaved) as StoredDailyReport;
+          form.reset({
+            reportDate: editReport.reportDate,
+            assignmentId: editReport.assignmentId,
+            startTime: editReport.startTime,
+            endTime: editReport.endTime,
+            visited: editReport.visited,
+            completedToday: editReport.completedToday,
+            pending: editReport.pending,
+            revisit: 0,
+            notMet: 0,
+            refused: 0,
+            temporarilyClosed: 0,
+            permanentlyClosed: 0,
+            moved: 0,
+            notFound: 0,
+            duplicate: 0,
+            newBusiness: 0,
+            note: editReport.note ?? "",
+            issue: editReport.issue ?? "",
+            followUpPlan: editReport.followUpPlan ?? "",
+            documentationName: ""
+          });
+          window.localStorage.removeItem(editReportStorageKey);
+        } catch {
+          window.localStorage.removeItem(editReportStorageKey);
+          if (rows[0]) form.setValue("assignmentId", rows[0].id);
+        }
+      } else if (rows[0]) {
+        form.setValue("assignmentId", rows[0].id);
+      }
       setIsLoadingAssignments(false);
     }
     loadAssignments();
