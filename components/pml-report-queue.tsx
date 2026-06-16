@@ -29,6 +29,7 @@ type StoredDailyReport = {
   endTime: string;
   note?: string;
   issue?: string;
+  followUpPlan?: string;
   status: "draft" | "dikirim" | "dikembalikan" | "disetujui";
   updatedAt: string;
 };
@@ -36,6 +37,7 @@ type StoredDailyReport = {
 export function PmlReportQueue() {
   const [rows, setRows] = useState<ImportedAllocationRow[]>([]);
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
+  const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
 
   useEffect(() => {
     setRows(loadImportedAllocations());
@@ -54,6 +56,7 @@ export function PmlReportQueue() {
 
   const sampleRows = rows.slice(0, 8);
   const queuedReports = reports.filter((report) => report.status === "dikirim");
+  const selectedReport = queuedReports.find((report) => report.id === selectedReportId) ?? queuedReports[0] ?? null;
 
   function loadReports() {
     const saved = window.localStorage.getItem(dailyReportsStorageKey);
@@ -109,6 +112,7 @@ export function PmlReportQueue() {
                     <td className="px-4 py-3"><Badge>dikirim</Badge></td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-2">
+                        <Button size="sm" variant="secondary" onClick={() => setSelectedReportId(report.id)}>Buka Detail</Button>
                         <Button size="sm" onClick={() => updateReportStatus(report.id, "disetujui")}>Setujui</Button>
                         <Button size="sm" variant="secondary" onClick={() => updateReportStatus(report.id, "dikembalikan")}>Kembalikan</Button>
                       </div>
@@ -127,6 +131,41 @@ export function PmlReportQueue() {
             </p>
           </div>
         )}
+
+        {selectedReport ? (
+          <section className="rounded-3xl border border-[var(--border)] bg-white/65 p-5 text-slate-900 dark:bg-slate-900/60 dark:text-slate-50">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-[#ff7a1a]">Detail Laporan</p>
+                <h3 className="mt-1 text-lg font-black">{titleCase(selectedReport.pcl)}</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">
+                  {selectedReport.reportDate} - {titleCase(selectedReport.village)} - {titleCase(selectedReport.sls)}
+                </p>
+              </div>
+              <Badge>{selectedReport.status}</Badge>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Metric label="Target SLS" value={numberId(selectedReport.target)} />
+              <Metric label="Dikunjungi" value={numberId(selectedReport.visited)} />
+              <Metric label="Selesai Hari Ini" value={numberId(selectedReport.completedToday)} />
+              <Metric label="Pending" value={numberId(selectedReport.pending)} />
+              <Metric label="Jam Mulai" value={selectedReport.startTime} />
+              <Metric label="Jam Selesai" value={selectedReport.endTime} />
+              <Metric label="PML" value={titleCase(selectedReport.pml)} />
+              <Metric label="ID Sub-SLS" value={selectedReport.subSlsId} />
+            </div>
+            {selectedReport.issue || selectedReport.note ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {selectedReport.note ? <NoteBox label="Catatan PCL" value={selectedReport.note} /> : null}
+                {selectedReport.issue ? <NoteBox label="Kendala" value={selectedReport.issue} /> : null}
+              </div>
+            ) : null}
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <Button variant="secondary" onClick={() => updateReportStatus(selectedReport.id, "dikembalikan")}>Kembalikan</Button>
+              <Button onClick={() => updateReportStatus(selectedReport.id, "disetujui")}>Setujui Laporan</Button>
+            </div>
+          </section>
+        ) : null}
 
         {!queuedReports.length && sampleRows.length ? (
           <div className="overflow-x-auto rounded-3xl border border-[var(--border)]">
@@ -159,6 +198,15 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="rounded-2xl bg-slate-50 p-3 dark:bg-white/5">
       <p className="text-xs font-bold text-slate-500">{label}</p>
       <p className="mt-1 font-black">{value}</p>
+    </div>
+  );
+}
+
+function NoteBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-slate-50 p-4 text-sm dark:bg-slate-950/60">
+      <p className="text-xs font-black uppercase text-slate-500 dark:text-slate-300">{label}</p>
+      <p className="mt-2 leading-6">{value}</p>
     </div>
   );
 }
