@@ -207,7 +207,8 @@ async function getImportActor() {
   } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Sesi pengguna tidak valid.");
 
-  const { data: profile, error } = await supabase.from("profiles").select("id, role").eq("id", user.id).maybeSingle();
+  const service = createServiceClient();
+  const { data: profile, error } = await service.from("profiles").select("id, role").eq("id", user.id).maybeSingle();
   if (error) throw new Error(error.message);
   const safeProfile = profile ?? await syncCurrentUserProfileAction();
   if (!["admin_kabupaten", "super_admin"].includes(String(safeProfile.role))) throw new Error("Hanya admin yang dapat menyimpan import alokasi.");
@@ -244,6 +245,17 @@ async function findOrCreatePetugas(supabase: ReturnType<typeof createServiceClie
 }
 
 export async function importAllocationToSupabaseAction(input: z.input<typeof allocationImportSchema>) {
+  try {
+    return await importAllocationToSupabase(input);
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : "Import alokasi gagal."
+    };
+  }
+}
+
+async function importAllocationToSupabase(input: z.input<typeof allocationImportSchema>) {
   const values = allocationImportSchema.parse(input);
   const actor = await getImportActor();
   const service = createServiceClient();
@@ -404,6 +416,7 @@ export async function importAllocationToSupabaseAction(input: z.input<typeof all
     revalidatePath("/penugasan");
 
     return {
+      ok: true as const,
       importBatchId: batch.id as string,
       rowCount: normalizedRows.length,
       totalTarget

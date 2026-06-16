@@ -118,6 +118,10 @@ export function UploadImporter() {
           rows: activeRows,
           decisions
         });
+        if (!result.ok) {
+          toast.error(result.error);
+          return;
+        }
         window.localStorage.setItem(importedAllocationsStorageKey, JSON.stringify({
           savedAt: new Date().toISOString(),
           rows: activeRows,
