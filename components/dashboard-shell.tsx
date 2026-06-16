@@ -47,7 +47,7 @@ const nav: NavItem[] = [
   { href: "/pemeriksaan", label: "Pemeriksaan", icon: ClipboardCheck, roles: ["pml", "super_admin", "admin_kabupaten"] },
   { href: "/pengawasan", label: "Pengawasan", icon: ShieldCheck, roles: ["pml", "super_admin", "admin_kabupaten"] },
   { href: "/rekap", label: "Rekap", icon: FileText, roles: ["pml", "koordinator_kecamatan", "pimpinan", "super_admin", "admin_kabupaten"] },
-  { href: "/profil", label: "Profil", icon: UserRound, roles: ["pcl", "pml", "koordinator_kecamatan", "pimpinan", "super_admin", "admin_kabupaten", "user"] },
+  { href: "/profil", label: "Profil", icon: UserRound, roles: ["koordinator_kecamatan", "pimpinan", "super_admin", "admin_kabupaten", "user"] },
   { href: "/settings", label: "Settings", icon: Settings, roles: ["super_admin", "admin_kabupaten"] }
 ];
 
@@ -222,13 +222,17 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                       </div>
                     </div>
                     <div className="p-3">
-                      <Link href="/profil" onClick={() => setAccountOpen(false)} className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-orange-50 hover:text-[#ff7a1a] dark:text-slate-200 dark:hover:bg-white/10">
-                        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-200">
-                          <UserRound className="h-4 w-4" />
-                        </span>
-                        Profile Saya
-                      </Link>
-                      <div className="my-2 h-px bg-slate-100 dark:bg-white/10" />
+                      {!["pcl", "pml"].includes(account.role) ? (
+                        <>
+                          <Link href="/profil" onClick={() => setAccountOpen(false)} className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-orange-50 hover:text-[#ff7a1a] dark:text-slate-200 dark:hover:bg-white/10">
+                            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-200">
+                              <UserRound className="h-4 w-4" />
+                            </span>
+                            Profile Saya
+                          </Link>
+                          <div className="my-2 h-px bg-slate-100 dark:bg-white/10" />
+                        </>
+                      ) : null}
                       <p className="px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-slate-400">Ganti Peran</p>
                       <button type="button" className="flex w-full items-center justify-between rounded-2xl bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">
                         <span className="flex items-center gap-3"><span className="h-2 w-2 rounded-full bg-blue-600" /> {formatRoleLabel(account.role)}</span>

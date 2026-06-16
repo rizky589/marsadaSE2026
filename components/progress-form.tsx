@@ -95,6 +95,30 @@ type ImportedRow = {
 };
 
 const importedAllocationsStorageKey = "marsada-imported-allocations";
+const dailyReportsStorageKey = "marsada-daily-reports";
+
+type StoredDailyReport = {
+  id: string;
+  reportDate: string;
+  assignmentId: string;
+  district: string;
+  village: string;
+  sls: string;
+  subSlsId: string;
+  target: number;
+  pml: string;
+  pcl: string;
+  visited: number;
+  completedToday: number;
+  pending: number;
+  startTime: string;
+  endTime: string;
+  note?: string;
+  issue?: string;
+  followUpPlan?: string;
+  status: "draft" | "dikirim" | "dikembalikan" | "disetujui";
+  updatedAt: string;
+};
 
 function normalize(value: string) {
   return value.trim().replace(/\s+/g, " ").toUpperCase();
@@ -189,7 +213,40 @@ export function ProgressForm() {
 
   function onSubmit(values: Values) {
     const assignment = pclAssignments.find((item) => item.id === values.assignmentId);
-    toast.success(intent === "draft" ? "Laporan tersimpan sebagai draft" : `Laporan ${assignment?.sls} dikirim ke PML`);
+    if (!assignment) {
+      toast.error("Penugasan belum dipilih.");
+      return;
+    }
+
+    const report: StoredDailyReport = {
+      id: `${values.assignmentId}-${values.reportDate}`,
+      reportDate: values.reportDate,
+      assignmentId: values.assignmentId,
+      district: assignment.district,
+      village: assignment.village,
+      sls: assignment.sls,
+      subSlsId: assignment.subSlsId,
+      target: assignment.load,
+      pml: assignment.pml,
+      pcl: assignment.pcl,
+      visited: values.visited,
+      completedToday: values.completedToday,
+      pending: values.pending,
+      startTime: values.startTime,
+      endTime: values.endTime,
+      note: values.note,
+      issue: values.issue,
+      followUpPlan: values.followUpPlan,
+      status: intent,
+      updatedAt: new Date().toISOString()
+    };
+    const saved = window.localStorage.getItem(dailyReportsStorageKey);
+    const reports = saved ? JSON.parse(saved) as StoredDailyReport[] : [];
+    const nextReports = reports.filter((item) => item.id !== report.id);
+    nextReports.unshift(report);
+    window.localStorage.setItem(dailyReportsStorageKey, JSON.stringify(nextReports));
+
+    toast.success(intent === "draft" ? "Laporan tersimpan sebagai draft" : `Laporan ${assignment.sls} dikirim ke PML`);
   }
 
   return (
@@ -200,13 +257,13 @@ export function ProgressForm() {
 
       <div className="grid min-w-0 gap-4 sm:grid-cols-2">
         <label className="space-y-2">
-          <span className="text-sm font-bold">Tanggal</span>
+          <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Tanggal</span>
           <Input type="date" {...form.register("reportDate")} />
           {form.formState.errors.reportDate ? <span className="text-xs text-red-600">{form.formState.errors.reportDate.message}</span> : null}
         </label>
         <label className="space-y-2">
-          <span className="text-sm font-bold">Penugasan/SLS</span>
-          <select className="h-11 w-full min-w-0 rounded-2xl border border-[var(--border)] bg-white/75 px-4 text-sm outline-none transition focus:border-[#ff7a1a] focus:ring-2 focus:ring-orange-200 dark:bg-white/10" {...form.register("assignmentId")}>
+          <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Penugasan/SLS</span>
+          <select className="h-11 w-full min-w-0 rounded-2xl border border-[var(--border)] bg-white/80 px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-[#ff7a1a] focus:ring-2 focus:ring-orange-200 dark:bg-slate-900/70 dark:text-slate-50 dark:focus:ring-orange-500/20" {...form.register("assignmentId")}>
             {!pclAssignments.length ? <option value="">{isLoadingAssignments ? "Memuat penugasan..." : "Belum ada penugasan aktif"}</option> : null}
             {pclAssignments.map((assignment) => (
               <option key={assignment.id} value={assignment.id}>
@@ -218,7 +275,7 @@ export function ProgressForm() {
         </label>
       </div>
 
-      <div className="grid min-w-0 gap-3 rounded-3xl border border-[var(--border)] bg-white/55 p-4 dark:bg-white/5 sm:grid-cols-2">
+      <div className="grid min-w-0 gap-3 rounded-3xl border border-[var(--border)] bg-white/70 p-4 text-slate-900 dark:bg-slate-900/60 dark:text-slate-50 sm:grid-cols-2">
         <ReadonlyField label="Nama kecamatan otomatis" value={selected?.district} />
         <ReadonlyField label="Nama desa otomatis" value={selected?.village} />
         <ReadonlyField label="Nama SLS otomatis" value={selected?.sls} />
@@ -229,11 +286,11 @@ export function ProgressForm() {
 
       <div className="grid min-w-0 gap-4 sm:grid-cols-2">
         <label className="space-y-2">
-          <span className="text-sm font-bold">Jam mulai</span>
+          <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Jam mulai</span>
           <Input type="time" {...form.register("startTime")} />
         </label>
         <label className="space-y-2">
-          <span className="text-sm font-bold">Jam selesai</span>
+          <span className="text-sm font-bold text-slate-800 dark:text-slate-100">Jam selesai</span>
           <Input type="time" {...form.register("endTime")} />
           {form.formState.errors.endTime ? <span className="text-xs text-red-600">{form.formState.errors.endTime.message}</span> : null}
         </label>
@@ -242,7 +299,7 @@ export function ProgressForm() {
       <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {numericFields.map((field) => (
           <label key={field} className="space-y-2">
-            <span className="text-sm font-bold">{numberLabels[field]}</span>
+            <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{numberLabels[field]}</span>
             <Input type="number" inputMode="numeric" min={0} {...form.register(field)} />
             {form.formState.errors[field] ? <span className="text-xs text-red-600">{form.formState.errors[field]?.message}</span> : null}
           </label>
@@ -256,7 +313,7 @@ export function ProgressForm() {
         <label className="flex min-h-28 flex-col items-center justify-center rounded-3xl border border-dashed border-[#ff7a1a]/60 bg-white/50 p-4 text-center text-sm transition hover:bg-orange-50 dark:bg-white/5">
           <UploadCloud className="mb-2 h-6 w-6 text-[#ff7a1a]" />
           <span className="font-bold">Dokumentasi opsional</span>
-          <span className="text-slate-500">Unggah foto/file pendukung tanpa data responden rahasia</span>
+          <span className="text-slate-500 dark:text-slate-300">Unggah foto/file pendukung tanpa data responden rahasia</span>
           <input className="sr-only" type="file" accept="image/*,.pdf" onChange={(event) => form.setValue("documentationName", event.target.files?.[0]?.name ?? "")} />
         </label>
       </div>
@@ -276,8 +333,8 @@ export function ProgressForm() {
 function ReadonlyField({ label, value }: { label: string; value?: string | number }) {
   return (
     <label className="space-y-2">
-      <span className="text-xs font-black uppercase text-slate-500">{label}</span>
-      <Input readOnly tabIndex={-1} value={value ?? "-"} className="bg-slate-100/80 font-bold text-slate-700 dark:bg-white/10 dark:text-slate-200" />
+      <span className="text-xs font-black uppercase text-slate-500 dark:text-slate-300">{label}</span>
+      <Input readOnly tabIndex={-1} value={value ?? "-"} className="bg-slate-100/80 font-bold text-slate-700 dark:bg-slate-950/60 dark:text-slate-100" />
     </label>
   );
 }
@@ -285,8 +342,8 @@ function ReadonlyField({ label, value }: { label: string; value?: string | numbe
 function TextArea({ label, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & { label: string }) {
   return (
     <label className="space-y-2">
-      <span className="text-sm font-bold">{label}</span>
-      <textarea className="min-h-24 w-full rounded-2xl border border-[var(--border)] bg-white/75 px-4 py-3 text-sm outline-none transition focus:border-[#ff7a1a] focus:ring-2 focus:ring-orange-200 dark:bg-white/10" {...props} />
+      <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{label}</span>
+      <textarea className="min-h-24 w-full rounded-2xl border border-[var(--border)] bg-white/80 px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[#ff7a1a] focus:ring-2 focus:ring-orange-200 dark:bg-slate-900/70 dark:text-slate-50 dark:focus:ring-orange-500/20" {...props} />
     </label>
   );
 }
