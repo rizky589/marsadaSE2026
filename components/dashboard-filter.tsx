@@ -83,7 +83,7 @@ export function DashboardFilter() {
 function FilterField({ label, value, type = "text" }: { label: string; value: string; type?: string }) {
   return (
     <label className="space-y-2">
-      <span className="text-sm font-bold">{label}</span>
+      <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{label}</span>
       <Input type={type} defaultValue={value} />
     </label>
   );
@@ -92,8 +92,8 @@ function FilterField({ label, value, type = "text" }: { label: string; value: st
 function SelectField({ label, values }: { label: string; values: string[] }) {
   return (
     <label className="space-y-2">
-      <span className="text-sm font-bold">{label}</span>
-      <select className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white/75 px-4 text-sm outline-none transition focus:border-[#ff7a1a] focus:ring-2 focus:ring-orange-200 dark:bg-white/10">
+      <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{label}</span>
+      <select className="h-11 w-full rounded-2xl border border-[var(--border)] bg-white/80 px-4 text-sm font-semibold text-slate-900 outline-none transition focus:border-[#ff7a1a] focus:ring-2 focus:ring-orange-200 dark:bg-slate-900/70 dark:text-slate-50 dark:focus:ring-orange-500/20">
         {values.map((value) => <option key={value}>{value}</option>)}
       </select>
     </label>

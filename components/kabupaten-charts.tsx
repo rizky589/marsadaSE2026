@@ -6,11 +6,12 @@ import { SafeResponsiveContainer } from "@/components/safe-responsive-container"
 import { loadImportedAllocations, normalizeName, resolvePclName, titleCase, type ImportedAllocationRow } from "@/lib/imported-allocations";
 
 const colors = ["#2563eb", "#ff7a1a", "#10b981", "#ef4444", "#64748b", "#8b5cf6"];
+const axisTick = { fill: "currentColor", fontSize: 12 };
 
 function ChartBox({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-3xl border border-[var(--border)] bg-white/55 p-4 dark:bg-white/5">
-      <h3 className="mb-3 text-sm font-black">{title}</h3>
+    <div className="rounded-3xl border border-[var(--border)] bg-white/70 p-4 text-slate-900 dark:bg-slate-900/60 dark:text-slate-50">
+      <h3 className="mb-3 text-sm font-black text-slate-900 dark:text-slate-50">{title}</h3>
       {children}
     </div>
   );
@@ -71,8 +72,8 @@ export function KabupatenCharts() {
         <SafeResponsiveContainer className="h-56 w-full">
           <LineChart data={data.productivityRows} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
-            <XAxis dataKey="day" tickLine={false} axisLine={false} />
-            <YAxis tickLine={false} axisLine={false} />
+            <XAxis dataKey="day" tickLine={false} axisLine={false} tick={axisTick} />
+            <YAxis tickLine={false} axisLine={false} tick={axisTick} />
             <Tooltip />
             <Line dataKey="selesai" stroke="#2563eb" strokeWidth={3} dot={false} />
           </LineChart>
@@ -83,8 +84,8 @@ export function KabupatenCharts() {
         <SafeResponsiveContainer className="h-56 w-full">
           <BarChart data={[{ name: "Kabupaten", target: data.target, selesai: 0 }]} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} />
-            <YAxis tickLine={false} axisLine={false} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={axisTick} />
+            <YAxis tickLine={false} axisLine={false} tick={axisTick} />
             <Tooltip />
             <Bar dataKey="target" fill="#cbd5e1" radius={[10, 10, 0, 0]} />
             <Bar dataKey="selesai" fill="#ff7a1a" radius={[10, 10, 0, 0]} />
@@ -96,8 +97,8 @@ export function KabupatenCharts() {
         <SafeResponsiveContainer className="h-56 w-full">
           <BarChart data={data.districtRows} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={0} angle={-20} height={58} />
-            <YAxis tickLine={false} axisLine={false} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ ...axisTick, fontSize: 10 }} interval={0} angle={-20} height={58} />
+            <YAxis tickLine={false} axisLine={false} tick={axisTick} />
             <Tooltip />
             <Bar dataKey="progress" fill="#10b981" radius={[10, 10, 0, 0]} />
           </BarChart>
@@ -108,8 +109,8 @@ export function KabupatenCharts() {
         <SafeResponsiveContainer className="h-56 w-full">
           <BarChart data={data.pmlRows} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={0} angle={-15} height={58} />
-            <YAxis tickLine={false} axisLine={false} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ ...axisTick, fontSize: 10 }} interval={0} angle={-15} height={58} />
+            <YAxis tickLine={false} axisLine={false} tick={axisTick} />
             <Tooltip />
             <Bar dataKey="target" fill="#2563eb" radius={[10, 10, 0, 0]} />
           </BarChart>
@@ -120,8 +121,8 @@ export function KabupatenCharts() {
         <SafeResponsiveContainer className="h-56 w-full">
           <BarChart data={data.burdenRows} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={0} angle={-15} height={58} />
-            <YAxis tickLine={false} axisLine={false} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ ...axisTick, fontSize: 10 }} interval={0} angle={-15} height={58} />
+            <YAxis tickLine={false} axisLine={false} tick={axisTick} />
             <Tooltip />
             <Bar dataKey="target" fill="#ff7a1a" radius={[10, 10, 0, 0]} />
           </BarChart>
@@ -143,8 +144,8 @@ export function KabupatenCharts() {
         <SafeResponsiveContainer className="h-56 w-full">
           <LineChart data={data.productivityRows} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
-            <XAxis dataKey="day" tickLine={false} axisLine={false} />
-            <YAxis tickLine={false} axisLine={false} />
+            <XAxis dataKey="day" tickLine={false} axisLine={false} tick={axisTick} />
+            <YAxis tickLine={false} axisLine={false} tick={axisTick} />
             <Tooltip />
             <Line dataKey="selesai" stroke="#10b981" strokeWidth={3} />
           </LineChart>
@@ -155,8 +156,8 @@ export function KabupatenCharts() {
         <SafeResponsiveContainer className="h-56 w-full">
           <BarChart data={data.lowPclRows} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={0} angle={-15} height={58} />
-            <YAxis tickLine={false} axisLine={false} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ ...axisTick, fontSize: 10 }} interval={0} angle={-15} height={58} />
+            <YAxis tickLine={false} axisLine={false} tick={axisTick} />
             <Tooltip />
             <Bar dataKey="progress" fill="#ef4444" radius={[10, 10, 0, 0]} />
           </BarChart>
@@ -167,8 +168,8 @@ export function KabupatenCharts() {
         <SafeResponsiveContainer className="h-56 w-full">
           <BarChart data={data.highNeedRows} margin={{ left: -20, right: 8, top: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
-            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10 }} interval={0} angle={-15} height={58} />
-            <YAxis tickLine={false} axisLine={false} />
+            <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ ...axisTick, fontSize: 10 }} interval={0} angle={-15} height={58} />
+            <YAxis tickLine={false} axisLine={false} tick={axisTick} />
             <Tooltip />
             <Bar dataKey="kebutuhan" fill="#8b5cf6" radius={[10, 10, 0, 0]} />
           </BarChart>
