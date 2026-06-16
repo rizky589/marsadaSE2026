@@ -144,7 +144,6 @@ function toAssignment(row: ImportedRow): Assignment {
 }
 
 export function ProgressForm() {
-  const [intent, setIntent] = useState<"draft" | "dikirim">("draft");
   const [importAssignments, setImportAssignments] = useState<Assignment[]>([]);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(true);
   const pclAssignments = importAssignments;
@@ -211,7 +210,14 @@ export function ProgressForm() {
   const selectedAssignmentId = form.watch("assignmentId");
   const selected = useMemo(() => pclAssignments.find((item) => item.id === selectedAssignmentId), [pclAssignments, selectedAssignmentId]);
 
-  function onSubmit(values: Values) {
+  function resolveSubmitIntent(event?: React.BaseSyntheticEvent): "draft" | "dikirim" {
+    const submitter = event?.nativeEvent instanceof SubmitEvent ? event.nativeEvent.submitter : null;
+    const value = submitter instanceof HTMLButtonElement ? submitter.value : "";
+    return value === "dikirim" ? "dikirim" : "draft";
+  }
+
+  function onSubmit(values: Values, event?: React.BaseSyntheticEvent) {
+    const submitIntent = resolveSubmitIntent(event);
     const assignment = pclAssignments.find((item) => item.id === values.assignmentId);
     if (!assignment) {
       toast.error("Penugasan belum dipilih.");
@@ -237,7 +243,7 @@ export function ProgressForm() {
       note: values.note,
       issue: values.issue,
       followUpPlan: values.followUpPlan,
-      status: intent,
+      status: submitIntent,
       updatedAt: new Date().toISOString()
     };
     const saved = window.localStorage.getItem(dailyReportsStorageKey);
@@ -246,7 +252,7 @@ export function ProgressForm() {
     nextReports.unshift(report);
     window.localStorage.setItem(dailyReportsStorageKey, JSON.stringify(nextReports));
 
-    toast.success(intent === "draft" ? "Laporan tersimpan sebagai draft" : `Laporan ${assignment.sls} dikirim ke PML`);
+    toast.success(submitIntent === "draft" ? "Laporan tersimpan sebagai draft" : `Laporan ${assignment.sls} dikirim ke PML`);
   }
 
   return (
@@ -319,10 +325,10 @@ export function ProgressForm() {
       </div>
 
       <div className="sticky bottom-24 z-10 grid min-w-0 gap-3 rounded-3xl border border-white/70 bg-white/85 p-3 shadow-2xl backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/80 sm:static sm:flex sm:justify-end sm:bg-transparent sm:p-0 sm:shadow-none">
-        <Button type="submit" variant="secondary" onClick={() => setIntent("draft")}>
+        <Button type="submit" variant="secondary" value="draft">
           <Save className="h-4 w-4" /> Simpan Draft
         </Button>
-        <Button type="submit" onClick={() => setIntent("dikirim")}>
+        <Button type="submit" value="dikirim">
           <Send className="h-4 w-4" /> Kirim ke PML
         </Button>
       </div>
