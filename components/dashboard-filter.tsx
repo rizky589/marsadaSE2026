@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dashboardFiltersFromParams, filterImportedRowsWithReports } from "@/lib/dashboard-filtering";
 import type { ImportedAllocationRow } from "@/lib/imported-allocations";
-import { assignments, districts, officers } from "@/lib/mock-data";
 import { numberId, pct, percentId } from "@/lib/utils";
 
 type StoredImport = {
@@ -97,15 +96,6 @@ export function DashboardFilter() {
   const selected = useMemo(() => dashboardFiltersFromParams(searchParams), [searchParams]);
 
   const options = useMemo(() => {
-    if (!rows.length) {
-      return {
-        kecamatan: districts,
-        desa: uniqueSorted(assignments.map((item) => item.village)),
-        pml: uniqueSorted(officers.filter((item) => item.role === "PML").map((item) => item.name)),
-        pcl: uniqueSorted(officers.filter((item) => item.role === "PCL").map((item) => item.name))
-      };
-    }
-
     return {
       kecamatan: uniqueSorted(rows.map((row) => titleCase(row.kecamatan))),
       desa: uniqueSorted(rows.map((row) => titleCase(row.desa))),

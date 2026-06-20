@@ -1,30 +1,62 @@
 import { NextResponse } from "next/server";
-import { assignments, dailyReports, districts } from "@/lib/mock-data";
-import { dailyNeed, districtProgress, productivity, regencyProgress } from "@/lib/progress-calculations";
+import { createServiceClient } from "@/lib/supabase/admin";
+
+type ProgressKecamatanRow = {
+  kecamatan: string;
+  target: number;
+  selesai: number;
+  sisa: number;
+  progres: number;
+};
+
+type ProgressKabupatenRow = {
+  target: number;
+  selesai: number;
+  sisa: number;
+  progres: number;
+};
+
+function dailyNeed(remaining: number) {
+  return Math.ceil(Math.max(0, remaining) / 57);
+}
 
 export async function GET() {
-  const rows = districts.map((district) => {
-    const progress = districtProgress(district, assignments, dailyReports);
-    return {
-      name: district,
-      target: progress.target,
-      selesai_resmi: progress.completed,
-      sisa: progress.remaining,
-      progres: Number(progress.percent.toFixed(2)),
-      rata_rata_harian: Number(productivity(progress.completed).toFixed(2)),
-      kebutuhan_harian: Number(dailyNeed(progress.remaining).toFixed(2))
-    };
-  });
-  const kabupaten = regencyProgress(assignments, dailyReports);
+  const service = createServiceClient();
+  const { data: districtData, error: districtError } = await service
+    .from("v_progress_kecamatan")
+    .select("kecamatan, target, selesai, sisa, progres")
+    .order("kecamatan", { ascending: true });
+  if (districtError) {
+    return NextResponse.json({ error: districtError.message }, { status: 500 });
+  }
+
+  const { data: kabupatenData, error: kabupatenError } = await service
+    .from("v_progress_kabupaten")
+    .select("target, selesai, sisa, progres")
+    .limit(1)
+    .maybeSingle();
+  if (kabupatenError) {
+    return NextResponse.json({ error: kabupatenError.message }, { status: 500 });
+  }
+
+  const rows = ((districtData ?? []) as ProgressKecamatanRow[]).map((row) => ({
+    name: row.kecamatan,
+    target: Number(row.target ?? 0),
+    selesai_resmi: Number(row.selesai ?? 0),
+    sisa: Number(row.sisa ?? 0),
+    progres: Number(row.progres ?? 0),
+    kebutuhan_harian: dailyNeed(Number(row.sisa ?? 0))
+  }));
+  const kabupaten = kabupatenData as ProgressKabupatenRow | null;
 
   return NextResponse.json({
     timezone: "Asia/Jakarta",
     generatedAt: new Date().toISOString(),
     kabupaten: {
-      target: kabupaten.target,
-      selesai_resmi: kabupaten.completed,
-      sisa: kabupaten.remaining,
-      progres: Number(kabupaten.percent.toFixed(2))
+      target: Number(kabupaten?.target ?? 0),
+      selesai_resmi: Number(kabupaten?.selesai ?? 0),
+      sisa: Number(kabupaten?.sisa ?? 0),
+      progres: Number(kabupaten?.progres ?? 0)
     },
     rows
   });

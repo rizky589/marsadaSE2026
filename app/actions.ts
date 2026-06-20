@@ -701,6 +701,23 @@ type ImportedDailyReportRow = {
   }> | null;
 };
 
+type ProgressSlsViewRow = {
+  penugasan_id: string;
+  kegiatan_id: string;
+  kecamatan: string;
+  desa: string;
+  nama_sls: string;
+  kode_sub_sls: string;
+  id_sub_sls: string;
+  pml: string;
+  pcl: string;
+  target: number;
+  selesai: number;
+  sisa: number;
+  progres: number;
+  laporan_updated_at?: string | null;
+};
+
 function firstItem<T>(value: MaybeArray<T> | null | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -834,6 +851,99 @@ export async function getDailyReportSnapshotAction() {
       updatedAt: report.updated_at
     };
   });
+}
+
+async function getProgressSlsRowsFromBaseTables(service: ReturnType<typeof createServiceClient>) {
+  const { data: assignmentsData, error: assignmentsError } = await service
+    .from("penugasan")
+    .select("id, kegiatan_id, target_aktual, sls:sls_id(nama_sls, kode_sub_sls, id_sub_sls, desa:desa_id(nama, kecamatan:kecamatan_id(nama))), pml:pml_id(nama), pcl:pcl_id(nama)")
+    .eq("aktif", true)
+    .order("created_at", { ascending: true });
+  if (assignmentsError) throw new Error(assignmentsError.message);
+
+  const assignmentIds = ((assignmentsData ?? []) as unknown as ImportedAssignmentRow[]).map((row) => row.id);
+  const completedByAssignment = new Map<string, { selesai: number; updatedAt: string | null }>();
+  if (assignmentIds.length) {
+    const { data: reportsData, error: reportsError } = await service
+      .from("laporan_harian")
+      .select("penugasan_id, jumlah_selesai_hari_ini, status, updated_at")
+      .in("penugasan_id", assignmentIds);
+    if (reportsError) throw new Error(reportsError.message);
+    (reportsData ?? []).forEach((report) => {
+      if (report.status !== "disetujui") return;
+      const current = completedByAssignment.get(String(report.penugasan_id)) ?? { selesai: 0, updatedAt: null };
+      const updatedAt = String(report.updated_at ?? "");
+      completedByAssignment.set(String(report.penugasan_id), {
+        selesai: current.selesai + Number(report.jumlah_selesai_hari_ini ?? 0),
+        updatedAt: !current.updatedAt || updatedAt > current.updatedAt ? updatedAt : current.updatedAt
+      });
+    });
+  }
+
+  return ((assignmentsData ?? []) as unknown as ImportedAssignmentRow[]).map((row) => {
+    const sls = firstItem(row.sls);
+    const desa = firstItem(sls?.desa);
+    const kecamatan = firstItem(desa?.kecamatan);
+    const pml = firstItem(row.pml);
+    const pcl = firstItem(row.pcl);
+    const completed = completedByAssignment.get(row.id);
+    const target = Number(row.target_aktual ?? 0);
+    const selesai = completed?.selesai ?? 0;
+    return {
+      penugasanId: row.id,
+      kegiatanId: "",
+      kecamatan: kecamatan?.nama ?? "-",
+      desa: desa?.nama ?? "-",
+      namaSls: sls?.nama_sls ?? "-",
+      kodeSubSls: sls?.kode_sub_sls ?? "",
+      idSubSls: sls?.id_sub_sls ?? row.id,
+      pml: pml?.nama ?? "-",
+      pcl: pcl?.nama ?? "-",
+      target,
+      selesai,
+      sisa: Math.max(0, target - selesai),
+      progres: target ? Number(((selesai / target) * 100).toFixed(3)) : 0,
+      laporanUpdatedAt: completed?.updatedAt ?? null
+    };
+  });
+}
+
+export async function getProgressSlsSnapshotAction() {
+  const supabase = await requireSupabase();
+  const {
+    data: { user },
+    error: userError
+  } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Sesi pengguna tidak valid.");
+
+  const service = createServiceClient();
+  const { data, error } = await service
+    .from("v_progress_sls")
+    .select("penugasan_id, kegiatan_id, kecamatan, desa, nama_sls, kode_sub_sls, id_sub_sls, pml, pcl, target, selesai, sisa, progres, laporan_updated_at")
+    .order("kecamatan", { ascending: true })
+    .order("desa", { ascending: true })
+    .order("id_sub_sls", { ascending: true });
+
+  if (error) {
+    return getProgressSlsRowsFromBaseTables(service);
+  }
+
+  return ((data ?? []) as ProgressSlsViewRow[]).map((row) => ({
+    penugasanId: row.penugasan_id,
+    kegiatanId: row.kegiatan_id,
+    kecamatan: row.kecamatan,
+    desa: row.desa,
+    namaSls: row.nama_sls,
+    kodeSubSls: row.kode_sub_sls,
+    idSubSls: row.id_sub_sls,
+    pml: row.pml,
+    pcl: row.pcl,
+    target: Number(row.target ?? 0),
+    selesai: Number(row.selesai ?? 0),
+    sisa: Number(row.sisa ?? 0),
+    progres: Number(row.progres ?? 0),
+    laporanUpdatedAt: row.laporan_updated_at ?? null
+  }));
 }
 
 export async function saveImportedDailyReportAction(input: z.input<typeof importedDailyReportSchema>) {
