@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { createClient } from "@/lib/supabase/client";
-import { numberId, pct } from "@/lib/utils";
+import { numberId, pct, percentId } from "@/lib/utils";
 
 type ImportedRow = {
   kecamatan: string;
@@ -185,7 +185,7 @@ export function PmlImportDashboard() {
         <div className="mt-5 space-y-2">
           <div className="flex justify-between text-sm font-bold">
             <span>Progres Tim</span>
-            <span>{teamProgress}%</span>
+            <span>{percentId(teamProgress)}</span>
           </div>
           <Progress value={teamProgress} />
         </div>
@@ -199,7 +199,7 @@ export function PmlImportDashboard() {
           ["Target Tim", numberId(totalTarget)],
           ["Selesai", numberId(totalCompleted)],
           ["Sisa", numberId(totalRemaining)],
-          ["Progres Tim", `${teamProgress}%`],
+          ["Progres Tim", percentId(teamProgress)],
           ["PCL Aktif Hari Ini", numberId(activeToday)],
           ["Menunggu Pemeriksaan", numberId(pendingReports)],
           ["Kendala Aktif", "0"]
@@ -235,7 +235,7 @@ export function PmlImportDashboard() {
                     <td className="px-4 py-4">{numberId(row.completed)}</td>
                     <td className="px-4 py-4">
                       <div className="min-w-32 space-y-2">
-                        <div className="text-xs font-bold">{pct(row.completed, row.target)}%</div>
+                        <div className="text-xs font-bold">{percentId(pct(row.completed, row.target))}</div>
                         <Progress value={pct(row.completed, row.target)} />
                       </div>
                     </td>
@@ -271,7 +271,7 @@ export function PmlImportDashboard() {
                     <td className="px-4 py-4">{numberId(Math.max(0, row.target - row.completed))}</td>
                     <td className="px-4 py-4">
                       <div className="min-w-32 space-y-2">
-                        <div className="text-xs font-bold">{pct(row.completed, row.target)}%</div>
+                        <div className="text-xs font-bold">{percentId(pct(row.completed, row.target))}</div>
                         <Progress value={pct(row.completed, row.target)} />
                       </div>
                     </td>

@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { createClient } from "@/lib/supabase/client";
-import { numberId, pct } from "@/lib/utils";
+import { numberId, pct, percentId } from "@/lib/utils";
 
 type ImportedRow = {
   kecamatan: string;
@@ -146,7 +146,7 @@ export function PclImportDashboard() {
         <div className="mt-5 space-y-2">
           <div className="flex justify-between text-sm font-bold">
             <span>Progres Saya</span>
-            <span>{progressValue}%</span>
+            <span>{percentId(progressValue)}</span>
           </div>
           <Progress value={progressValue} />
         </div>
@@ -158,7 +158,7 @@ export function PclImportDashboard() {
           ["SLS/Sub-SLS", numberId(rows.length)],
           ["Selesai", numberId(completed)],
           ["Sisa", numberId(remaining)],
-          ["Progres", `${progressValue}%`],
+          ["Progres", percentId(progressValue)],
           ["Hasil Hari Ini", numberId(todayDone)],
           ["Kebutuhan per Hari", numberId(Math.ceil(remaining / 57))],
           ["Status Progres", completed > 0 ? "Berjalan" : "Belum ada laporan"]
@@ -199,7 +199,7 @@ export function PclImportDashboard() {
                 <Metric label="Target" value={numberId(row.targetAwal)} />
                 <Metric label="Selesai" value={numberId(rowCompleted)} />
                 <Metric label="Sisa" value={numberId(rowRemaining)} />
-                <Metric label="Progres" value={`${rowProgress}%`} />
+                <Metric label="Progres" value={percentId(rowProgress)} />
               </div>
                   </>
                 );

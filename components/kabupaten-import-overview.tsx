@@ -6,7 +6,7 @@ import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { loadImportedAllocations, summarizeImportedAllocations, type ImportedAllocationRow } from "@/lib/imported-allocations";
-import { numberId, pct } from "@/lib/utils";
+import { numberId, pct, percentId } from "@/lib/utils";
 
 const dailyReportsStorageKey = "marsada-daily-reports";
 
@@ -68,7 +68,7 @@ export function KabupatenImportOverview() {
     { label: "Total Target", value: numberId(summary.target), icon: BarChart3, tone: "text-orange-600" },
     { label: "Total Selesai", value: numberId(completed), icon: CheckCircle2, tone: "text-emerald-600" },
     { label: "Total Sisa", value: numberId(remaining), icon: ClipboardCheck, tone: "text-slate-600" },
-    { label: "Progres Kabupaten", value: `${progressValue}%`, icon: BarChart3, tone: "text-blue-600" },
+    { label: "Progres Kabupaten", value: percentId(progressValue), icon: BarChart3, tone: "text-blue-600" },
     { label: "PCL Aktif Hari Ini", value: numberId(activeToday), icon: Users, tone: "text-emerald-600" },
     { label: "PCL Belum Melapor", value: numberId(Math.max(0, summary.pcl - activeToday)), icon: AlertTriangle, tone: "text-orange-600" },
     { label: "Belum Diperiksa", value: numberId(pendingReports), icon: ClipboardCheck, tone: "text-blue-600" },
@@ -86,7 +86,7 @@ export function KabupatenImportOverview() {
         <div className="mt-6 max-w-3xl space-y-2">
           <div className="flex justify-between text-sm font-bold">
             <span>Progres Kabupaten</span>
-            <span>{progressValue}%</span>
+            <span>{percentId(progressValue)}</span>
           </div>
           <Progress value={progressValue} />
         </div>
