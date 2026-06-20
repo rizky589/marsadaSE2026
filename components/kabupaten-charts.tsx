@@ -5,11 +5,12 @@ import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, Too
 import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { SafeResponsiveContainer } from "@/components/safe-responsive-container";
 import { loadImportedAllocations, normalizeName, resolvePclName, titleCase, type ImportedAllocationRow } from "@/lib/imported-allocations";
-import { pct } from "@/lib/utils";
+import { pct, percentId } from "@/lib/utils";
 
 const colors = ["#2563eb", "#ff7a1a", "#10b981", "#ef4444", "#64748b", "#8b5cf6"];
 const axisTick = { fill: "currentColor", fontSize: 12 };
 const dailyReportsStorageKey = "marsada-daily-reports";
+const percentTooltipFormatter = (value: unknown) => percentId(Number(value) || 0);
 
 type StoredDailyReport = {
   subSlsId: string;
@@ -153,7 +154,7 @@ export function KabupatenCharts() {
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
             <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ ...axisTick, fontSize: 10 }} interval={0} angle={-20} height={58} />
             <YAxis tickLine={false} axisLine={false} tick={axisTick} />
-            <Tooltip />
+            <Tooltip formatter={percentTooltipFormatter} />
             <Bar dataKey="progress" fill="#10b981" radius={[10, 10, 0, 0]} />
           </BarChart>
         </SafeResponsiveContainer>
@@ -212,7 +213,7 @@ export function KabupatenCharts() {
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,.22)" />
             <XAxis dataKey="name" tickLine={false} axisLine={false} tick={{ ...axisTick, fontSize: 10 }} interval={0} angle={-15} height={58} />
             <YAxis tickLine={false} axisLine={false} tick={axisTick} />
-            <Tooltip />
+            <Tooltip formatter={percentTooltipFormatter} />
             <Bar dataKey="progress" fill="#ef4444" radius={[10, 10, 0, 0]} />
           </BarChart>
         </SafeResponsiveContainer>
