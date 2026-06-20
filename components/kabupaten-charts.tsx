@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, Tooltip, XAxis, YAxis } from "recharts";
+import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { SafeResponsiveContainer } from "@/components/safe-responsive-container";
 import { loadImportedAllocations, normalizeName, resolvePclName, titleCase, type ImportedAllocationRow } from "@/lib/imported-allocations";
 import { pct } from "@/lib/utils";
@@ -44,7 +45,21 @@ export function KabupatenCharts() {
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
 
   useEffect(() => {
-    setRows(loadImportedAllocations());
+    let active = true;
+    async function loadRows() {
+      try {
+        const snapshot = await getImportedAllocationSnapshotAction();
+        if (active && snapshot.rows.length) {
+          setRows(snapshot.rows);
+          return;
+        }
+      } catch {
+        // Local import preview remains available before Supabase is configured.
+      }
+      if (active) setRows(loadImportedAllocations());
+    }
+
+    loadRows();
     const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
     if (savedReports) {
       try {
@@ -53,6 +68,9 @@ export function KabupatenCharts() {
         window.localStorage.removeItem(dailyReportsStorageKey);
       }
     }
+    return () => {
+      active = false;
+    };
   }, []);
 
   const data = useMemo(() => {

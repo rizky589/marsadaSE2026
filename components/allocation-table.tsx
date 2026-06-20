@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { Assignment } from "@/lib/types";
@@ -57,18 +58,43 @@ export function AllocationTable({ fallbackRows }: { fallbackRows: Assignment[] }
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(importedAllocationsStorageKey);
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved) as StoredImport;
-      const rows = parsed.rows?.map(toAssignment).filter((row) => row.subSlsId && row.load > 0);
-      if (rows?.length) {
-        setStoredRows(rows);
-        setSavedAt(parsed.savedAt ?? null);
+    let active = true;
+
+    function loadLocalImport() {
+      const saved = window.localStorage.getItem(importedAllocationsStorageKey);
+      if (!saved || !active) return;
+      try {
+        const parsed = JSON.parse(saved) as StoredImport;
+        const rows = parsed.rows?.map(toAssignment).filter((row) => row.subSlsId && row.load > 0);
+        if (rows?.length) {
+          setStoredRows(rows);
+          setSavedAt(parsed.savedAt ?? null);
+        }
+      } catch {
+        window.localStorage.removeItem(importedAllocationsStorageKey);
       }
-    } catch {
-      window.localStorage.removeItem(importedAllocationsStorageKey);
     }
+
+    async function loadImport() {
+      try {
+        const snapshot = await getImportedAllocationSnapshotAction();
+        if (!active) return;
+        const rows = snapshot.rows.map(toAssignment).filter((row) => row.subSlsId && row.load > 0);
+        if (rows.length) {
+          setStoredRows(rows);
+          setSavedAt(snapshot.savedAt);
+          return;
+        }
+      } catch {
+        // Local import preview remains available before Supabase is configured.
+      }
+      loadLocalImport();
+    }
+
+    loadImport();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const rows = storedRows?.length ? storedRows : fallbackRows;
@@ -76,7 +102,7 @@ export function AllocationTable({ fallbackRows }: { fallbackRows: Assignment[] }
   const safePage = Math.min(page, totalPages);
   const visibleRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
   const sourceText = useMemo(() => {
-    if (!storedRows?.length) return "Menampilkan data contoh karena belum ada import tersimpan di browser ini.";
+    if (!storedRows?.length) return "Menampilkan data contoh karena belum ada import tersimpan.";
     return `${numberId(storedRows.length)} baris aktif dari import Excel tersimpan${savedAt ? ` pada ${new Date(savedAt).toLocaleString("id-ID")}` : ""}.`;
   }, [savedAt, storedRows]);
 

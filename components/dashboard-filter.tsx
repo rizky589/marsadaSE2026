@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { assignments, districts, officers } from "@/lib/mock-data";
@@ -38,14 +39,36 @@ export function DashboardFilter() {
   const [rows, setRows] = useState<ImportedRow[]>([]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(storageKey);
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved) as StoredImport;
-      setRows((parsed.rows ?? []).filter((row) => row.idSubSls && row.targetAwal > 0));
-    } catch {
-      window.localStorage.removeItem(storageKey);
+    let active = true;
+
+    function loadLocalImport() {
+      const saved = window.localStorage.getItem(storageKey);
+      if (!saved || !active) return;
+      try {
+        const parsed = JSON.parse(saved) as StoredImport;
+        setRows((parsed.rows ?? []).filter((row) => row.idSubSls && row.targetAwal > 0));
+      } catch {
+        window.localStorage.removeItem(storageKey);
+      }
     }
+
+    async function loadRows() {
+      try {
+        const snapshot = await getImportedAllocationSnapshotAction();
+        if (active && snapshot.rows.length) {
+          setRows(snapshot.rows);
+          return;
+        }
+      } catch {
+        // Local import preview remains available before Supabase is configured.
+      }
+      loadLocalImport();
+    }
+
+    loadRows();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const options = useMemo(() => {

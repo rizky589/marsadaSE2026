@@ -2,6 +2,7 @@
 
 import { AlertTriangle, BarChart3, CheckCircle2, ClipboardCheck, MapPinned, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { loadImportedAllocations, summarizeImportedAllocations, type ImportedAllocationRow } from "@/lib/imported-allocations";
@@ -22,7 +23,21 @@ export function KabupatenImportOverview() {
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
 
   useEffect(() => {
-    setRows(loadImportedAllocations());
+    let active = true;
+    async function loadRows() {
+      try {
+        const snapshot = await getImportedAllocationSnapshotAction();
+        if (active && snapshot.rows.length) {
+          setRows(snapshot.rows);
+          return;
+        }
+      } catch {
+        // Local import preview remains available before Supabase is configured.
+      }
+      if (active) setRows(loadImportedAllocations());
+    }
+
+    loadRows();
     const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
     if (savedReports) {
       try {
@@ -31,6 +46,9 @@ export function KabupatenImportOverview() {
         window.localStorage.removeItem(dailyReportsStorageKey);
       }
     }
+    return () => {
+      active = false;
+    };
   }, []);
 
   const summary = useMemo(() => summarizeImportedAllocations(rows), [rows]);

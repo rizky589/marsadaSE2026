@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,15 +43,39 @@ export function ImportResultPanel({ mode }: { mode: ImportMode }) {
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(importedAllocationsStorageKey);
-    if (!saved) return;
-    try {
-      const parsed = JSON.parse(saved) as StoredImport;
-      setRows((parsed.rows ?? []).filter((row) => row.idSubSls && row.targetAwal > 0));
-      setSavedAt(parsed.savedAt ?? null);
-    } catch {
-      window.localStorage.removeItem(importedAllocationsStorageKey);
+    let active = true;
+
+    function loadLocalImport() {
+      const saved = window.localStorage.getItem(importedAllocationsStorageKey);
+      if (!saved || !active) return;
+      try {
+        const parsed = JSON.parse(saved) as StoredImport;
+        setRows((parsed.rows ?? []).filter((row) => row.idSubSls && row.targetAwal > 0));
+        setSavedAt(parsed.savedAt ?? null);
+      } catch {
+        window.localStorage.removeItem(importedAllocationsStorageKey);
+      }
     }
+
+    async function loadImport() {
+      try {
+        const snapshot = await getImportedAllocationSnapshotAction();
+        if (!active) return;
+        if (snapshot.rows.length) {
+          setRows(snapshot.rows);
+          setSavedAt(snapshot.savedAt);
+          return;
+        }
+      } catch {
+        // Local import preview remains available before Supabase is configured.
+      }
+      loadLocalImport();
+    }
+
+    loadImport();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const summary = useMemo(() => buildSummary(rows), [rows]);

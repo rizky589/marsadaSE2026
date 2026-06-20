@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -76,15 +77,26 @@ export function PmlImportDashboard() {
         setProfile(null);
       }
 
-      const saved = window.localStorage.getItem(storageKey);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved) as StoredImport;
-          setRows((parsed.rows ?? []).filter((row) => row.idSubSls && row.targetAwal > 0));
-        } catch {
-          window.localStorage.removeItem(storageKey);
+      let importedRows: ImportedRow[] = [];
+      try {
+        const snapshot = await getImportedAllocationSnapshotAction();
+        importedRows = snapshot.rows;
+      } catch {
+        // Local import preview remains available before Supabase is configured.
+      }
+
+      if (!importedRows.length) {
+        const saved = window.localStorage.getItem(storageKey);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved) as StoredImport;
+            importedRows = (parsed.rows ?? []).filter((row) => row.idSubSls && row.targetAwal > 0);
+          } catch {
+            window.localStorage.removeItem(storageKey);
+          }
         }
       }
+      setRows(importedRows);
 
       const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
       if (savedReports) {

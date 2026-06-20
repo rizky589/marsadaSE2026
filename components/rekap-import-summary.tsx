@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { EvaluationExport } from "@/components/evaluation-export";
 import { loadImportedAllocations, summarizeImportedAllocations, type ImportedAllocationRow } from "@/lib/imported-allocations";
 import { numberId } from "@/lib/utils";
@@ -9,7 +10,24 @@ export function RekapImportSummary() {
   const [rows, setRows] = useState<ImportedAllocationRow[]>([]);
 
   useEffect(() => {
-    setRows(loadImportedAllocations());
+    let active = true;
+    async function loadRows() {
+      try {
+        const snapshot = await getImportedAllocationSnapshotAction();
+        if (active && snapshot.rows.length) {
+          setRows(snapshot.rows);
+          return;
+        }
+      } catch {
+        // Local import preview remains available before Supabase is configured.
+      }
+      if (active) setRows(loadImportedAllocations());
+    }
+
+    loadRows();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const summary = useMemo(() => summarizeImportedAllocations(rows), [rows]);

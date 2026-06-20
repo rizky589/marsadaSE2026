@@ -634,6 +634,10 @@ type PclAssignmentRow = {
 
 type MaybeArray<T> = T | T[];
 
+type ImportedAssignmentRow = PclAssignmentRow & {
+  created_at?: string | null;
+};
+
 function firstItem<T>(value: MaybeArray<T> | null | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -678,6 +682,48 @@ export async function getMyPclAssignmentsAction() {
       pclId: pcl?.id ?? profile.petugas_id ?? ""
     };
   });
+}
+
+export async function getImportedAllocationSnapshotAction() {
+  const supabase = await requireSupabase();
+  const {
+    data: { user },
+    error: userError
+  } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Sesi pengguna tidak valid.");
+
+  const service = createServiceClient();
+  const { data, error } = await service
+    .from("penugasan")
+    .select("id, created_at, target_aktual, sls:sls_id(nama_sls, kode_sub_sls, id_sub_sls, desa:desa_id(nama, kecamatan:kecamatan_id(nama))), pml:pml_id(id, nama), pcl:pcl_id(id, nama)")
+    .eq("aktif", true)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+
+  const rows = ((data ?? []) as unknown as ImportedAssignmentRow[]).map((row) => {
+    const sls = firstItem(row.sls);
+    const desa = firstItem(sls?.desa);
+    const kecamatan = firstItem(desa?.kecamatan);
+    const pml = firstItem(row.pml);
+    const pcl = firstItem(row.pcl);
+
+    return {
+      kecamatan: kecamatan?.nama ?? "-",
+      desa: desa?.nama ?? "-",
+      namaSls: sls?.nama_sls ?? "-",
+      kodeSubSls: sls?.kode_sub_sls ?? "",
+      idSubSls: sls?.id_sub_sls ?? row.id,
+      targetAwal: Number(row.target_aktual ?? 0),
+      pml: pml?.nama ?? "-",
+      pcl: pcl?.nama ?? "-",
+      savedAt: row.created_at ?? null
+    };
+  });
+
+  return {
+    rows: rows.filter((row) => row.idSubSls && row.targetAwal > 0),
+    savedAt: rows.findLast((row) => row.savedAt)?.savedAt ?? null
+  };
 }
 
 export async function createOfficerAction(input: z.input<typeof officerSchema>) {
