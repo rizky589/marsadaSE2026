@@ -14,7 +14,8 @@ export function formatDate(value: string | Date) {
 export function pct(done: number, target: number) {
   if (!target) return 0;
   const value = Math.min(100, (done / target) * 100);
-  if (value > 0 && value < 1) return Number(value.toFixed(1));
+  if (value > 0 && value < 0.01) return Number(value.toFixed(3));
+  if (value > 0 && value < 1) return Number(value.toFixed(2));
   return Math.round(value);
 }
 
@@ -23,5 +24,6 @@ export function numberId(value: number) {
 }
 
 export function percentId(value: number) {
-  return `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(value)}%`;
+  const maximumFractionDigits = value > 0 && value < 0.01 ? 3 : value > 0 && value < 1 ? 2 : 1;
+  return `${new Intl.NumberFormat("id-ID", { maximumFractionDigits }).format(value)}%`;
 }
