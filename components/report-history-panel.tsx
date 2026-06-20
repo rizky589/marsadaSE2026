@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getDailyReportSnapshotAction, getMyPclAssignmentsAction, saveImportedDailyReportAction } from "@/app/actions";
 import { CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
 import { numberId } from "@/lib/utils";
 
-type ImportedRow = { pcl: string; idSubSls: string; targetAwal: number };
 type StoredDailyReport = {
   id: string;
   reportDate: string;
+  assignmentId: string;
   village: string;
   sls: string;
   subSlsId: string;
@@ -26,17 +26,7 @@ type StoredDailyReport = {
   updatedAt: string;
 };
 
-const importedAllocationsStorageKey = "marsada-imported-allocations";
-const dailyReportsStorageKey = "marsada-daily-reports";
 const editReportStorageKey = "marsada-edit-report";
-
-function normalize(value: string) {
-  return value.trim().replace(/\s+/g, " ").toUpperCase();
-}
-
-function nameFromEmail(email: string) {
-  return normalize(email.split("@")[0].replace(/[._-]+/g, " "));
-}
 
 function titleCase(value: string) {
   return value.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -45,39 +35,50 @@ function titleCase(value: string) {
 export function ReportHistoryPanel() {
   const [hasImportAssignments, setHasImportAssignments] = useState(false);
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
-  const [pclName, setPclName] = useState("");
 
   useEffect(() => {
     async function load() {
-      let pclName = "";
       try {
-        const supabase = createClient();
-        const { data } = await supabase.auth.getUser();
-        if (data.user?.email) pclName = nameFromEmail(data.user.email);
+        const assignments = await getMyPclAssignmentsAction();
+        setHasImportAssignments(assignments.length > 0);
+        const serverReports = await getDailyReportSnapshotAction();
+        const assignmentIds = new Set(assignments.map((assignment) => assignment.subSlsId));
+        setReports((serverReports as StoredDailyReport[]).filter((report) => assignmentIds.has(report.subSlsId)));
       } catch {
-        pclName = "";
-      }
-      const saved = window.localStorage.getItem(importedAllocationsStorageKey);
-      if (!saved || !pclName) return;
-      setPclName(pclName);
-      const parsed = JSON.parse(saved) as { rows?: ImportedRow[] };
-      setHasImportAssignments(Boolean((parsed.rows ?? []).some((row) => row.idSubSls && row.targetAwal > 0 && normalize(row.pcl) === pclName)));
-
-      const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
-      if (savedReports) {
-        const parsedReports = JSON.parse(savedReports) as StoredDailyReport[];
-        setReports(parsedReports.filter((report) => normalize(report.pcl) === pclName));
+        setHasImportAssignments(false);
+        setReports([]);
       }
     }
     load();
   }, []);
 
-  function updateReportStatus(reportId: string, status: "dikirim") {
-    const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
-    const allReports = savedReports ? JSON.parse(savedReports) as StoredDailyReport[] : [];
-    const nextReports = allReports.map((report) => report.id === reportId ? { ...report, status, updatedAt: new Date().toISOString() } : report);
-    window.localStorage.setItem(dailyReportsStorageKey, JSON.stringify(nextReports));
-    setReports(nextReports.filter((report) => normalize(report.pcl) === pclName));
+  async function updateReportStatus(reportId: string, status: "dikirim") {
+    const report = reports.find((item) => item.id === reportId);
+    if (!report) return;
+    try {
+      await saveImportedDailyReportAction({
+        report_date: report.reportDate,
+        assignment_id: report.assignmentId,
+        start_time: report.startTime,
+        end_time: report.endTime,
+        visited: report.visited,
+        completed_today: report.completedToday,
+        pending: report.pending,
+        revisit: 0,
+        not_met: 0,
+        refused: 0,
+        temporarily_closed: 0,
+        permanently_closed: 0,
+        moved: 0,
+        not_found: 0,
+        duplicate: 0,
+        new_business: 0,
+        status
+      });
+      setReports((current) => current.map((item) => item.id === reportId ? { ...item, status, updatedAt: new Date().toISOString() } : item));
+    } catch {
+      // The form will surface detailed save errors when the report is edited.
+    }
   }
 
   function editReport(report: StoredDailyReport) {

@@ -59,12 +59,10 @@ export function PmlReportQueue() {
         const serverReports = await getDailyReportSnapshotAction();
         if (active) {
           setReports(serverReports as StoredDailyReport[]);
-          return;
         }
       } catch {
-        // Local reports remain available before Supabase is configured.
+        if (active) setReports([]);
       }
-      loadReports();
     }
     loadRows();
     loadServerReports();
@@ -87,29 +85,15 @@ export function PmlReportQueue() {
   const queuedReports = reports.filter((report) => report.status === "dikirim");
   const selectedReport = queuedReports.find((report) => report.id === selectedReportId) ?? queuedReports[0] ?? null;
 
-  function loadReports() {
-    const saved = window.localStorage.getItem(dailyReportsStorageKey);
-    if (!saved) {
-      setReports([]);
-      return;
-    }
-    try {
-      setReports(JSON.parse(saved) as StoredDailyReport[]);
-    } catch {
-      window.localStorage.removeItem(dailyReportsStorageKey);
-      setReports([]);
-    }
-  }
-
   async function updateReportStatus(reportId: string, status: "dikembalikan" | "disetujui") {
-    const nextReports = reports.map((report) => report.id === reportId ? { ...report, status, updatedAt: new Date().toISOString() } : report);
-    setReports(nextReports);
-    window.localStorage.setItem(dailyReportsStorageKey, JSON.stringify(nextReports));
     try {
       await reviewImportedDailyReportAction(reportId, status);
+      const nextReports = reports.map((report) => report.id === reportId ? { ...report, status, updatedAt: new Date().toISOString() } : report);
+      setReports(nextReports);
+      window.localStorage.setItem(dailyReportsStorageKey, JSON.stringify(nextReports));
       toast.success(status === "disetujui" ? "Laporan disetujui" : "Laporan dikembalikan");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Status tersimpan lokal, tetapi gagal sinkron ke Supabase");
+      toast.error(error instanceof Error ? error.message : "Status laporan gagal disimpan ke Supabase");
     }
   }
 

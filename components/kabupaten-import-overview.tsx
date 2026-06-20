@@ -10,8 +10,6 @@ import { loadImportedAllocations, summarizeImportedAllocations, type ImportedAll
 import { dashboardFiltersFromParams, filterImportedRowsWithReports } from "@/lib/dashboard-filtering";
 import { numberId, pct, percentId } from "@/lib/utils";
 
-const dailyReportsStorageKey = "marsada-daily-reports";
-
 type StoredDailyReport = {
   subSlsId: string;
   reportDate: string;
@@ -46,18 +44,9 @@ export function KabupatenImportOverview() {
         const serverReports = await getDailyReportSnapshotAction();
         if (active) {
           setReports(serverReports as StoredDailyReport[]);
-          return;
         }
       } catch {
-        // Local reports remain available before Supabase is configured.
-      }
-      const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
-      if (savedReports) {
-        try {
-          setReports(JSON.parse(savedReports) as StoredDailyReport[]);
-        } catch {
-          window.localStorage.removeItem(dailyReportsStorageKey);
-        }
+        if (active) setReports([]);
       }
     }
     loadReports();

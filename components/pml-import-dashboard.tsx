@@ -30,8 +30,6 @@ type ProfileRecord = {
 };
 
 const storageKey = "marsada-imported-allocations";
-const dailyReportsStorageKey = "marsada-daily-reports";
-
 type StoredDailyReport = {
   subSlsId: string;
   reportDate: string;
@@ -104,14 +102,7 @@ export function PmlImportDashboard() {
         const serverReports = await getDailyReportSnapshotAction();
         setReports(serverReports as StoredDailyReport[]);
       } catch {
-        const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
-        if (savedReports) {
-          try {
-            setReports(JSON.parse(savedReports) as StoredDailyReport[]);
-          } catch {
-            window.localStorage.removeItem(dailyReportsStorageKey);
-          }
-        }
+        setReports([]);
       }
     }
     load();

@@ -280,12 +280,6 @@ export function ProgressForm() {
       status: submitIntent,
       updatedAt: new Date().toISOString()
     };
-    const saved = window.localStorage.getItem(dailyReportsStorageKey);
-    const reports = saved ? JSON.parse(saved) as StoredDailyReport[] : [];
-    const nextReports = reports.filter((item) => item.id !== report.id);
-    nextReports.unshift(report);
-    window.localStorage.setItem(dailyReportsStorageKey, JSON.stringify(nextReports));
-
     try {
       await saveImportedDailyReportAction({
         report_date: values.reportDate,
@@ -310,9 +304,14 @@ export function ProgressForm() {
         documentation_path: values.documentationName,
         status: submitIntent
       });
+      const saved = window.localStorage.getItem(dailyReportsStorageKey);
+      const reports = saved ? JSON.parse(saved) as StoredDailyReport[] : [];
+      const nextReports = reports.filter((item) => item.id !== report.id);
+      nextReports.unshift(report);
+      window.localStorage.setItem(dailyReportsStorageKey, JSON.stringify(nextReports));
       toast.success(submitIntent === "draft" ? "Laporan tersimpan sebagai draft" : `Laporan ${assignment.sls} dikirim ke PML`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Laporan tersimpan lokal, tetapi gagal sinkron ke Supabase");
+      toast.error(error instanceof Error ? error.message : "Laporan gagal disimpan ke Supabase");
     }
   }
 

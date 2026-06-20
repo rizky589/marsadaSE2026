@@ -25,8 +25,6 @@ type StoredImport = {
 };
 
 const importedAllocationsStorageKey = "marsada-imported-allocations";
-const dailyReportsStorageKey = "marsada-daily-reports";
-
 type StoredDailyReport = {
   assignmentId: string;
   subSlsId: string;
@@ -97,14 +95,7 @@ export function PclImportDashboard() {
         const serverReports = await getDailyReportSnapshotAction();
         setReports((serverReports as StoredDailyReport[]).filter((report) => ownedRows.some((row) => row.idSubSls === report.subSlsId)));
       } catch {
-        const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
-        if (savedReports) {
-          try {
-            setReports(JSON.parse(savedReports) as StoredDailyReport[]);
-          } catch {
-            window.localStorage.removeItem(dailyReportsStorageKey);
-          }
-        }
+        setReports([]);
       }
       setIsLoading(false);
     }

@@ -11,7 +11,6 @@ import { numberId, pct, percentId } from "@/lib/utils";
 
 const colors = ["#2563eb", "#ff7a1a", "#10b981", "#ef4444", "#64748b", "#8b5cf6"];
 const axisTick = { fill: "currentColor", fontSize: 11 };
-const dailyReportsStorageKey = "marsada-daily-reports";
 const percentTooltipFormatter = (value: unknown) => percentId(Number(value) || 0);
 const numberTooltipFormatter = (value: unknown) => numberId(Number(value) || 0);
 
@@ -74,18 +73,9 @@ export function KabupatenCharts() {
         const serverReports = await getDailyReportSnapshotAction();
         if (active) {
           setReports(serverReports as StoredDailyReport[]);
-          return;
         }
       } catch {
-        // Local reports remain available before Supabase is configured.
-      }
-      const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
-      if (savedReports) {
-        try {
-          setReports(JSON.parse(savedReports) as StoredDailyReport[]);
-        } catch {
-          window.localStorage.removeItem(dailyReportsStorageKey);
-        }
+        if (active) setReports([]);
       }
     }
     loadReports();
