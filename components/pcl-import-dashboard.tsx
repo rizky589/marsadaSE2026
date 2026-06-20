@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getDailyReportSnapshotAction, getMyPclAssignmentsAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { createClient } from "@/lib/supabase/client";
 import { numberId, pct, percentId } from "@/lib/utils";
@@ -51,6 +52,7 @@ export function PclImportDashboard() {
   const [rows, setRows] = useState<ImportedRow[]>([]);
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -109,7 +111,15 @@ export function PclImportDashboard() {
     load();
   }, []);
 
-  const target = useMemo(() => rows.reduce((sum, row) => sum + row.targetAwal, 0), [rows]);
+  const filteredRows = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return rows;
+    return rows.filter((row) =>
+      [row.kecamatan, row.desa, row.namaSls, row.kodeSubSls, row.idSubSls, row.pml, row.pcl]
+        .some((value) => String(value ?? "").toLowerCase().includes(normalized))
+    );
+  }, [query, rows]);
+  const target = useMemo(() => filteredRows.reduce((sum, row) => sum + row.targetAwal, 0), [filteredRows]);
   const approvedReports = useMemo(() => reports.filter((report) => report.status === "disetujui"), [reports]);
   const completedBySubSls = useMemo(() => {
     const map = new Map<string, number>();
@@ -118,9 +128,10 @@ export function PclImportDashboard() {
     });
     return map;
   }, [approvedReports]);
-  const completed = useMemo(() => rows.reduce((sum, row) => sum + (completedBySubSls.get(row.idSubSls) ?? 0), 0), [completedBySubSls, rows]);
+  const completed = useMemo(() => filteredRows.reduce((sum, row) => sum + (completedBySubSls.get(row.idSubSls) ?? 0), 0), [completedBySubSls, filteredRows]);
   const today = new Date().toISOString().slice(0, 10);
-  const todayDone = useMemo(() => approvedReports.filter((report) => report.reportDate === today).reduce((sum, report) => sum + report.completedToday, 0), [approvedReports, today]);
+  const filteredSubSlsIds = useMemo(() => new Set(filteredRows.map((row) => row.idSubSls)), [filteredRows]);
+  const todayDone = useMemo(() => approvedReports.filter((report) => report.reportDate === today && filteredSubSlsIds.has(report.subSlsId)).reduce((sum, report) => sum + report.completedToday, 0), [approvedReports, filteredSubSlsIds, today]);
   const remaining = Math.max(0, target - completed);
   const progressValue = pct(completed, target);
 
@@ -160,7 +171,7 @@ export function PclImportDashboard() {
       <section className="grid grid-cols-1 gap-3 lg:grid-cols-4">
         {[
           ["Target Saya", numberId(target)],
-          ["SLS/Sub-SLS", numberId(rows.length)],
+          ["SLS/Sub-SLS", numberId(filteredRows.length)],
           ["Selesai", numberId(completed)],
           ["Sisa", numberId(remaining)],
           ["Progres", percentId(progressValue)],
@@ -183,7 +194,10 @@ export function PclImportDashboard() {
           <CardDescription>PCL hanya melihat SLS/Sub-SLS yang menjadi tugasnya.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          {rows.map((row) => (
+          <div className="max-w-lg">
+            <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari desa, SLS, ID Sub-SLS, kecamatan, atau PML..." />
+          </div>
+          {filteredRows.map((row) => (
             <article key={row.idSubSls} className="rounded-3xl border border-[var(--border)] bg-white/55 p-4 dark:bg-white/5">
               {(() => {
                 const rowCompleted = completedBySubSls.get(row.idSubSls) ?? 0;

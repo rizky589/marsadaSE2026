@@ -5,6 +5,7 @@ import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { numberId } from "@/lib/utils";
 
 type ImportMode = "wilayah" | "petugas" | "hubungan" | "penugasan";
@@ -41,6 +42,7 @@ function resolvePclName(name: string, pml: string) {
 export function ImportResultPanel({ mode }: { mode: ImportMode }) {
   const [rows, setRows] = useState<ImportedRow[]>([]);
   const [savedAt, setSavedAt] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -78,7 +80,8 @@ export function ImportResultPanel({ mode }: { mode: ImportMode }) {
     };
   }, []);
 
-  const summary = useMemo(() => buildSummary(rows), [rows]);
+  const filteredRows = useMemo(() => filterRows(rows, query), [query, rows]);
+  const summary = useMemo(() => buildSummary(filteredRows), [filteredRows]);
 
   if (!rows.length) {
     return (
@@ -96,12 +99,25 @@ export function ImportResultPanel({ mode }: { mode: ImportMode }) {
       <div className="rounded-3xl border border-blue-200 bg-blue-50/80 p-4 text-sm font-bold text-blue-900 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-100">
         Data dari import Excel tersimpan: {numberId(rows.length)} penugasan aktif{savedAt ? `, disimpan ${new Date(savedAt).toLocaleString("id-ID")}` : ""}.
       </div>
+      <div className="flex flex-col gap-2 sm:max-w-lg">
+        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari kecamatan, desa, SLS, ID, PML, atau PCL..." />
+        {query ? <p className="text-sm font-semibold text-slate-500 dark:text-slate-300">{numberId(filteredRows.length)} hasil sesuai pencarian</p> : null}
+      </div>
 
-      {mode === "wilayah" ? <WilayahView rows={rows} summary={summary} /> : null}
+      {mode === "wilayah" ? <WilayahView rows={filteredRows} summary={summary} /> : null}
       {mode === "petugas" ? <PetugasView summary={summary} /> : null}
       {mode === "hubungan" ? <HubunganView summary={summary} /> : null}
-      {mode === "penugasan" ? <PenugasanView rows={rows} /> : null}
+      {mode === "penugasan" ? <PenugasanView rows={filteredRows} /> : null}
     </div>
+  );
+}
+
+function filterRows(rows: ImportedRow[], query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return rows;
+  return rows.filter((row) =>
+    [row.kecamatan, row.desa, row.namaSls, row.kodeSubSls, row.idSubSls, row.pml, row.pcl, resolvePclName(row.pcl, row.pml)]
+      .some((value) => String(value ?? "").toLowerCase().includes(normalized))
   );
 }
 

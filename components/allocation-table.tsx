@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import type { Assignment } from "@/lib/types";
 import { numberId } from "@/lib/utils";
 
@@ -56,6 +57,7 @@ export function AllocationTable({ fallbackRows }: { fallbackRows: Assignment[] }
   const [storedRows, setStoredRows] = useState<Assignment[] | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [page, setPage] = useState(1);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -98,18 +100,33 @@ export function AllocationTable({ fallbackRows }: { fallbackRows: Assignment[] }
   }, []);
 
   const rows = storedRows?.length ? storedRows : fallbackRows;
-  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const visibleRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const filteredRows = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return rows;
+    return rows.filter((row) =>
+      [row.district, row.village, row.sls, row.subSlsId, row.pml, row.pcl]
+        .some((value) => String(value ?? "").toLowerCase().includes(normalized))
+    );
+  }, [query, rows]);
+  const filteredTotalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const safePage = Math.min(page, filteredTotalPages);
+  const visibleRows = filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize);
   const sourceText = useMemo(() => {
     if (!storedRows?.length) return "Menampilkan data contoh karena belum ada import tersimpan.";
     return `${numberId(storedRows.length)} baris aktif dari import Excel tersimpan${savedAt ? ` pada ${new Date(savedAt).toLocaleString("id-ID")}` : ""}.`;
   }, [savedAt, storedRows]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
   return (
     <div className="space-y-4">
       <div className="rounded-3xl border border-blue-200 bg-blue-50/80 p-4 text-sm font-bold text-blue-900 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-100">
         {sourceText}
+      </div>
+      <div className="max-w-md">
+        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari kecamatan, desa, SLS, ID, PML, atau PCL..." />
       </div>
       <div className="overflow-x-auto rounded-3xl border border-[var(--border)]">
         <table className="w-full min-w-[900px] text-left text-sm">
@@ -119,7 +136,7 @@ export function AllocationTable({ fallbackRows }: { fallbackRows: Assignment[] }
           <tbody>{visibleRows.map((item) => <tr key={item.id} className="border-t border-[var(--border)] transition hover:bg-orange-50/70 dark:hover:bg-white/5"><td className="px-4 py-4">{item.district}</td><td className="px-4 py-4">{item.village}</td><td className="px-4 py-4 font-bold">{item.sls}</td><td className="px-4 py-4 font-mono text-xs">{item.subSlsId}</td><td className="px-4 py-4">{numberId(item.load)}</td><td className="px-4 py-4">{item.pml}</td><td className="px-4 py-4">{item.pcl}</td><td className="px-4 py-4"><Badge>Aman</Badge></td></tr>)}</tbody>
         </table>
       </div>
-      <PaginationControls page={safePage} totalPages={totalPages} totalRows={rows.length} onPageChange={setPage} />
+      <PaginationControls page={safePage} totalPages={filteredTotalPages} totalRows={filteredRows.length} onPageChange={setPage} />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getDailyReportSnapshotAction, getImportedAllocationSnapshotAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { createClient } from "@/lib/supabase/client";
 import { numberId, pct, percentId } from "@/lib/utils";
@@ -62,6 +63,7 @@ export function PmlImportDashboard() {
   const [rows, setRows] = useState<ImportedRow[]>([]);
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
   const [profile, setProfile] = useState<ProfileRecord | null>(null);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -120,6 +122,15 @@ export function PmlImportDashboard() {
     const pmlName = normalize(profile.nama_lengkap ?? "");
     return rows.filter((row) => normalize(row.pml) === pmlName);
   }, [profile, rows]);
+  const searchedRows = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return visibleRows;
+    return visibleRows.filter((row) =>
+      [row.kecamatan, row.desa, row.namaSls, row.kodeSubSls, row.idSubSls, row.pml, row.pcl, resolvePclName(row.pcl, row.pml)]
+        .some((value) => String(value ?? "").toLowerCase().includes(normalized))
+    );
+  }, [query, visibleRows]);
+  const searchedSubSlsIds = useMemo(() => new Set(searchedRows.map((row) => row.idSubSls)), [searchedRows]);
 
   const approvedReports = useMemo(() => reports.filter((report) => report.status === "disetujui"), [reports]);
   const completedBySubSls = useMemo(() => {
@@ -129,13 +140,13 @@ export function PmlImportDashboard() {
     });
     return map;
   }, [approvedReports]);
-  const pendingReports = useMemo(() => reports.filter((report) => report.status === "dikirim").length, [reports]);
+  const pendingReports = useMemo(() => reports.filter((report) => report.status === "dikirim" && searchedSubSlsIds.has(report.subSlsId)).length, [reports, searchedSubSlsIds]);
   const today = new Date().toISOString().slice(0, 10);
-  const activeToday = useMemo(() => new Set(reports.filter((report) => report.reportDate === today).map((report) => normalize(report.pcl))).size, [reports, today]);
+  const activeToday = useMemo(() => new Set(reports.filter((report) => report.reportDate === today && searchedSubSlsIds.has(report.subSlsId)).map((report) => normalize(report.pcl))).size, [reports, searchedSubSlsIds, today]);
 
   const pmlRows = useMemo(() => {
     const map = new Map<string, { name: string; pcls: Set<string>; sls: number; target: number; completed: number; villages: Set<string> }>();
-    visibleRows.forEach((row) => {
+    searchedRows.forEach((row) => {
       const key = normalize(row.pml);
       const current = map.get(key) ?? { name: row.pml, pcls: new Set<string>(), sls: 0, target: 0, completed: 0, villages: new Set<string>() };
       current.pcls.add(resolvePclName(normalize(row.pcl), normalize(row.pml)));
@@ -146,11 +157,11 @@ export function PmlImportDashboard() {
       map.set(key, current);
     });
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "id"));
-  }, [completedBySubSls, visibleRows]);
+  }, [completedBySubSls, searchedRows]);
 
   const pclRows = useMemo(() => {
     const map = new Map<string, { pml: string; name: string; sls: number; target: number; completed: number; villages: Set<string> }>();
-    visibleRows.forEach((row) => {
+    searchedRows.forEach((row) => {
       const resolvedPcl = resolvePclName(normalize(row.pcl), normalize(row.pml));
       const key = `${normalize(row.pml)}|${resolvedPcl}`;
       const current = map.get(key) ?? { pml: row.pml, name: resolvedPcl, sls: 0, target: 0, completed: 0, villages: new Set<string>() };
@@ -161,14 +172,14 @@ export function PmlImportDashboard() {
       map.set(key, current);
     });
     return [...map.values()].sort((a, b) => a.pml.localeCompare(b.pml, "id") || a.name.localeCompare(b.name, "id"));
-  }, [completedBySubSls, visibleRows]);
+  }, [completedBySubSls, searchedRows]);
 
   const totalTarget = pmlRows.reduce((sum, row) => sum + row.target, 0);
   const totalCompleted = pmlRows.reduce((sum, row) => sum + row.completed, 0);
   const totalRemaining = Math.max(0, totalTarget - totalCompleted);
   const teamProgress = pct(totalCompleted, totalTarget);
   const totalPcl = new Set(pclRows.map((row) => `${normalize(row.pml)}|${normalize(row.name)}`)).size;
-  const totalSls = visibleRows.length;
+  const totalSls = searchedRows.length;
 
   if (!rows.length) {
     return (
@@ -217,6 +228,10 @@ export function PmlImportDashboard() {
           </Card>
         ))}
       </section>
+
+      <div className="max-w-lg">
+        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cari PML, PCL, desa, SLS, atau ID Sub-SLS..." />
+      </div>
 
       <Card>
         <CardHeader>
