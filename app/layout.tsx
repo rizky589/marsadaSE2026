@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"], display: "swap" });
 
 export const metadata: Metadata = {
   title: "MARSADA",
-  description: "Monitoring, Analisis, Rekap, Supervisi, dan Data Lapangan Sensus Ekonomi 2026 Kabupaten Labuhanbatu Utara"
+  description: "Monitoring, Analisis, Rekap, Supervisi, dan Data Lapangan Sensus Ekonomi 2026 BPS Kabupaten Labuhanbatu Utara"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

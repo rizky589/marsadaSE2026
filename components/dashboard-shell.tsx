@@ -233,13 +233,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                           <div className="my-2 h-px bg-slate-100 dark:bg-white/10" />
                         </>
                       ) : null}
-                      <p className="px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-slate-400">Ganti Peran</p>
+                      <p className="px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-slate-400">Roles</p>
                       <button type="button" className="flex w-full items-center justify-between rounded-2xl bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">
                         <span className="flex items-center gap-3"><span className="h-2 w-2 rounded-full bg-blue-600" /> {formatRoleLabel(account.role)}</span>
                         <Check className="h-4 w-4" />
                       </button>
                       <button type="button" className="mt-1 flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-orange-50 hover:text-[#ff7a1a] dark:text-slate-300 dark:hover:bg-white/10">
-                        <span className="h-2 w-2 rounded-full bg-slate-300" /> Pimpinan
+                        <span className="h-2 w-2 rounded-full bg-slate-300" />
                       </button>
                       <div className="my-2 h-px bg-slate-100 dark:bg-white/10" />
                       <button type="button" onClick={handleSignOut} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:hover:bg-red-500/10">
