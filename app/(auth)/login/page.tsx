@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AuthForm } from "@/components/auth-form";
 import { BrandLockup } from "@/components/brand-lockup";
 
@@ -15,12 +14,6 @@ export default function LoginPage() {
           <span className="font-black text-orange-200">PML</span> masuk ke Dashboard PML untuk memeriksa laporan PCL, menyetujui, atau mengembalikan.
         </div>
       </div>
-      <p className="mt-5 text-center text-sm text-white/75">
-        Belum punya akun?{" "}
-        <Link href="/register" className="font-bold text-orange-300 hover:text-orange-200">
-          Daftar
-        </Link>
-      </p>
     </section>
   );
 }

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, Tooltip, XAxis, YAxis } from "recharts";
 import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { SafeResponsiveContainer } from "@/components/safe-responsive-container";
 import { loadImportedAllocations, normalizeName, resolvePclName, titleCase, type ImportedAllocationRow } from "@/lib/imported-allocations";
+import { dashboardFiltersFromParams, filterImportedRowsWithReports } from "@/lib/dashboard-filtering";
 import { pct, percentId } from "@/lib/utils";
 
 const colors = ["#2563eb", "#ff7a1a", "#10b981", "#ef4444", "#64748b", "#8b5cf6"];
@@ -42,6 +44,7 @@ function groupTargets(rows: ImportedAllocationRow[], completedBySubSls: Map<stri
 }
 
 export function KabupatenCharts() {
+  const searchParams = useSearchParams();
   const [rows, setRows] = useState<ImportedAllocationRow[]>([]);
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
 
@@ -75,21 +78,23 @@ export function KabupatenCharts() {
   }, []);
 
   const data = useMemo(() => {
-    const target = rows.reduce((sum, row) => sum + row.targetAwal, 0);
+    const filteredRows = filterImportedRowsWithReports(rows, dashboardFiltersFromParams(searchParams), reports);
+    const filteredSubSlsIds = new Set(filteredRows.map((row) => row.idSubSls));
+    const target = filteredRows.reduce((sum, row) => sum + row.targetAwal, 0);
     const approvedReports = reports.filter((report) => report.status === "disetujui");
-    const completed = approvedReports.reduce((sum, report) => sum + report.completedToday, 0);
+    const completed = approvedReports.filter((report) => filteredSubSlsIds.has(report.subSlsId)).reduce((sum, report) => sum + report.completedToday, 0);
     const completedBySubSls = new Map<string, number>();
-    approvedReports.forEach((report) => {
+    approvedReports.filter((report) => filteredSubSlsIds.has(report.subSlsId)).forEach((report) => {
       completedBySubSls.set(report.subSlsId, (completedBySubSls.get(report.subSlsId) ?? 0) + report.completedToday);
     });
-    const districtRows = groupTargets(rows, completedBySubSls, (row) => titleCase(row.kecamatan));
-    const pmlRows = groupTargets(rows, completedBySubSls, (row) => titleCase(row.pml));
-    const burdenRows = groupTargets(rows, completedBySubSls, (row) => titleCase(resolvePclName(row.pcl, row.pml))).sort((a, b) => b.target - a.target).slice(0, 20);
+    const districtRows = groupTargets(filteredRows, completedBySubSls, (row) => titleCase(row.kecamatan));
+    const pmlRows = groupTargets(filteredRows, completedBySubSls, (row) => titleCase(row.pml));
+    const burdenRows = groupTargets(filteredRows, completedBySubSls, (row) => titleCase(resolvePclName(row.pcl, row.pml))).sort((a, b) => b.target - a.target).slice(0, 20);
     const lowPclRows = [...burdenRows].sort((a, b) => a.progress - b.progress).slice(0, 20);
     const highNeedRows = burdenRows.map((row) => ({ name: row.name, kebutuhan: Math.ceil(Math.max(0, row.target - row.selesai) / 57) })).sort((a, b) => b.kebutuhan - a.kebutuhan).slice(0, 20);
     const statuses = ["draft", "dikirim", "dikembalikan", "disetujui"] as const;
     const statusRows = [
-      ...statuses.map((status) => ({ status, jumlah: reports.filter((report) => report.status === status).length })),
+      ...statuses.map((status) => ({ status, jumlah: reports.filter((report) => report.status === status && filteredSubSlsIds.has(report.subSlsId)).length })),
       { status: "dibuka_kembali", jumlah: 0 }
     ];
     const dailyMap = new Map<string, number>();
@@ -111,7 +116,7 @@ export function KabupatenCharts() {
     ];
 
     return { target, completed, districtRows, pmlRows, burdenRows, lowPclRows, highNeedRows, statusRows, productivityRows, issueRows };
-  }, [reports, rows]);
+  }, [reports, rows, searchParams]);
 
   if (!rows.length) {
     return (

@@ -1,4 +1,5 @@
 import { Filter } from "lucide-react";
+import { Suspense } from "react";
 import { DashboardFilter } from "@/components/dashboard-filter";
 import { KabupatenImportOverview } from "@/components/kabupaten-import-overview";
 import { KabupatenChartsPanel } from "@/components/kabupaten-charts-panel";
@@ -9,7 +10,9 @@ export default function DashboardPage() {
   return (
     <MotionShell>
       <div className="space-y-5">
-        <KabupatenImportOverview />
+        <Suspense fallback={null}>
+          <KabupatenImportOverview />
+        </Suspense>
 
         <Card>
           <CardHeader>
@@ -19,7 +22,9 @@ export default function DashboardPage() {
             </div>
             
           </CardHeader>
-          <DashboardFilter />
+          <Suspense fallback={null}>
+            <DashboardFilter />
+          </Suspense>
         </Card>
 
         <Card>
@@ -28,7 +33,9 @@ export default function DashboardPage() {
             
           </CardHeader>
           <CardContent>
-            <KabupatenChartsPanel />
+            <Suspense fallback={null}>
+              <KabupatenChartsPanel />
+            </Suspense>
           </CardContent>
         </Card>
       </div>

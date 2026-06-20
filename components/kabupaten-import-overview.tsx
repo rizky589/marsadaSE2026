@@ -1,11 +1,13 @@
 "use client";
 
 import { AlertTriangle, BarChart3, CheckCircle2, ClipboardCheck, MapPinned, Users } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { getImportedAllocationSnapshotAction } from "@/app/actions";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { loadImportedAllocations, summarizeImportedAllocations, type ImportedAllocationRow } from "@/lib/imported-allocations";
+import { dashboardFiltersFromParams, filterImportedRowsWithReports } from "@/lib/dashboard-filtering";
 import { numberId, pct, percentId } from "@/lib/utils";
 
 const dailyReportsStorageKey = "marsada-daily-reports";
@@ -19,6 +21,7 @@ type StoredDailyReport = {
 };
 
 export function KabupatenImportOverview() {
+  const searchParams = useSearchParams();
   const [rows, setRows] = useState<ImportedAllocationRow[]>([]);
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
 
@@ -51,14 +54,16 @@ export function KabupatenImportOverview() {
     };
   }, []);
 
-  const summary = useMemo(() => summarizeImportedAllocations(rows), [rows]);
+  const filteredRows = useMemo(() => filterImportedRowsWithReports(rows, dashboardFiltersFromParams(searchParams), reports), [rows, reports, searchParams]);
+  const filteredSubSlsIds = useMemo(() => new Set(filteredRows.map((row) => row.idSubSls)), [filteredRows]);
+  const summary = useMemo(() => summarizeImportedAllocations(filteredRows), [filteredRows]);
   const approvedReports = useMemo(() => reports.filter((report) => report.status === "disetujui"), [reports]);
-  const completed = useMemo(() => approvedReports.reduce((sum, report) => sum + report.completedToday, 0), [approvedReports]);
+  const completed = useMemo(() => approvedReports.filter((report) => filteredSubSlsIds.has(report.subSlsId)).reduce((sum, report) => sum + report.completedToday, 0), [approvedReports, filteredSubSlsIds]);
   const remaining = Math.max(0, summary.target - completed);
   const progressValue = pct(completed, summary.target);
   const today = new Date().toISOString().slice(0, 10);
-  const activeToday = new Set(reports.filter((report) => report.reportDate === today).map((report) => report.pcl)).size;
-  const pendingReports = reports.filter((report) => report.status === "dikirim").length;
+  const activeToday = new Set(reports.filter((report) => report.reportDate === today && filteredSubSlsIds.has(report.subSlsId)).map((report) => report.pcl)).size;
+  const pendingReports = reports.filter((report) => report.status === "dikirim" && filteredSubSlsIds.has(report.subSlsId)).length;
   const stats = [
     { label: "Jumlah Kecamatan", value: numberId(summary.kecamatan), icon: MapPinned, tone: "text-blue-600" },
     { label: "Jumlah Desa", value: numberId(summary.desa), icon: MapPinned, tone: "text-emerald-600" },
@@ -81,7 +86,7 @@ export function KabupatenImportOverview() {
       <section className="relative overflow-hidden rounded-[2rem] bg-[#0b2a4a] p-5 text-white shadow-2xl shadow-blue-950/20 sm:p-7">
         <h2 className="mt-2 max-w-4xl text-3xl font-black sm:text-4xl">Monitoring SE2026 BPS Kab.Labuhanbatu Utara</h2>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-blue-100 sm:text-base">
-          {rows.length ? `${numberId(rows.length)} alokasi aktif dari Excel tersimpan. Progres resmi menunggu laporan PCL disetujui PML.` : "Upload dan simpan alokasi Excel terlebih dahulu agar dashboard memakai data nyata."}
+          {rows.length ? `${numberId(filteredRows.length)} dari ${numberId(rows.length)} alokasi aktif ditampilkan. Progres resmi menunggu laporan PCL disetujui PML.` : "Upload dan simpan alokasi Excel terlebih dahulu agar dashboard memakai data nyata."}
         </p>
         <div className="mt-6 max-w-3xl space-y-2">
           <div className="flex justify-between text-sm font-bold">

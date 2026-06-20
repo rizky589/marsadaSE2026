@@ -1,8 +1,9 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -38,6 +39,7 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number) {
 
 export function AuthForm({ mode, compact = false }: { mode: "login" | "register"; compact?: boolean }) {
   const router = useRouter();
+  const [showPassword, setShowPassword] = useState(false);
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: { email: "", password: "" } });
 
   async function onSubmit(values: FormValues) {
@@ -91,7 +93,15 @@ export function AuthForm({ mode, compact = false }: { mode: "login" | "register"
         <span className="text-sm font-semibold">Kata sandi</span>
         <div className="relative">
           <Lock className={cn("pointer-events-none absolute left-4 text-slate-400", compact ? "top-2.5 h-4 w-4" : "top-3 h-5 w-5")} />
-          <Input className={cn("text-slate-950", compact ? "h-10 rounded-xl pl-10" : "pl-12")} type="password" placeholder="Minimal 8 karakter" {...form.register("password")} />
+          <Input className={cn("text-slate-950", compact ? "h-10 rounded-xl pl-10 pr-10" : "pl-12 pr-12")} type={showPassword ? "text" : "password"} placeholder="Minimal 8 karakter" {...form.register("password")} />
+          <button
+            type="button"
+            onClick={() => setShowPassword((value) => !value)}
+            className={cn("absolute right-3 rounded-lg p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900", compact ? "top-2" : "top-2.5")}
+            aria-label={showPassword ? "Sembunyikan password" : "Tampilkan password"}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
         </div>
         {form.formState.errors.password ? <span className="text-xs text-orange-200">{form.formState.errors.password.message}</span> : null}
       </label>
