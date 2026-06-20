@@ -168,6 +168,39 @@ const createPetugasLoginSchema = z.object({
   path: ["role"]
 });
 
+const importedDailyReportSchema = z
+  .object({
+    report_date: z.string().date(),
+    assignment_id: z.string().uuid(),
+    start_time: z.string().min(1),
+    end_time: z.string().min(1),
+    visited: z.coerce.number().int().min(0),
+    completed_today: z.coerce.number().int().min(0),
+    pending: z.coerce.number().int().min(0),
+    revisit: z.coerce.number().int().min(0),
+    not_met: z.coerce.number().int().min(0),
+    refused: z.coerce.number().int().min(0),
+    temporarily_closed: z.coerce.number().int().min(0),
+    permanently_closed: z.coerce.number().int().min(0),
+    moved: z.coerce.number().int().min(0),
+    not_found: z.coerce.number().int().min(0),
+    duplicate: z.coerce.number().int().min(0),
+    new_business: z.coerce.number().int().min(0),
+    note: z.string().max(600).optional(),
+    issue: z.string().max(600).optional(),
+    follow_up_plan: z.string().max(600).optional(),
+    documentation_path: z.string().max(400).optional(),
+    status: z.enum(["draft", "dikirim"])
+  })
+  .superRefine((values, ctx) => {
+    if (values.report_date < "2026-05-01" || values.report_date > "2026-06-30") {
+      ctx.addIssue({ code: "custom", path: ["report_date"], message: "Tanggal harus dalam periode kegiatan" });
+    }
+    if (values.end_time < values.start_time) {
+      ctx.addIssue({ code: "custom", path: ["end_time"], message: "Jam selesai tidak boleh lebih awal dari jam mulai" });
+    }
+  });
+
 async function requireSupabase() {
   const supabase = await createClient();
   if (!supabase) throw new Error("Supabase belum dikonfigurasi.");
@@ -638,6 +671,36 @@ type ImportedAssignmentRow = PclAssignmentRow & {
   created_at?: string | null;
 };
 
+type ImportedDailyReportRow = {
+  id: string;
+  tanggal: string;
+  penugasan_id: string;
+  jumlah_dikunjungi: number;
+  jumlah_selesai_hari_ini: number;
+  pending: number;
+  jam_mulai: string;
+  jam_selesai: string;
+  catatan?: string | null;
+  kendala?: string | null;
+  rencana_tindak_lanjut?: string | null;
+  status: "draft" | "dikirim" | "dikembalikan" | "disetujui" | "dibuka_kembali";
+  updated_at: string;
+  penugasan?: MaybeArray<{
+    target_aktual: number;
+    sls?: MaybeArray<{
+      nama_sls: string;
+      kode_sub_sls: string;
+      id_sub_sls: string;
+      desa?: MaybeArray<{
+        nama: string;
+        kecamatan?: MaybeArray<{ nama: string }> | null;
+      }> | null;
+    }> | null;
+    pml?: MaybeArray<{ nama: string }> | null;
+    pcl?: MaybeArray<{ nama: string }> | null;
+  }> | null;
+};
+
 function firstItem<T>(value: MaybeArray<T> | null | undefined) {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -724,6 +787,146 @@ export async function getImportedAllocationSnapshotAction() {
     rows: rows.filter((row) => row.idSubSls && row.targetAwal > 0),
     savedAt: rows.findLast((row) => row.savedAt)?.savedAt ?? null
   };
+}
+
+export async function getDailyReportSnapshotAction() {
+  const supabase = await requireSupabase();
+  const {
+    data: { user },
+    error: userError
+  } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Sesi pengguna tidak valid.");
+
+  const service = createServiceClient();
+  const { data, error } = await service
+    .from("laporan_harian")
+    .select("id, tanggal, penugasan_id, jumlah_dikunjungi, jumlah_selesai_hari_ini, pending, jam_mulai, jam_selesai, catatan, kendala, rencana_tindak_lanjut, status, updated_at, penugasan:penugasan_id(target_aktual, sls:sls_id(nama_sls, kode_sub_sls, id_sub_sls, desa:desa_id(nama, kecamatan:kecamatan_id(nama))), pml:pml_id(nama), pcl:pcl_id(nama))")
+    .order("updated_at", { ascending: false });
+  if (error) throw new Error(error.message);
+
+  return ((data ?? []) as unknown as ImportedDailyReportRow[]).map((report) => {
+    const assignment = firstItem(report.penugasan);
+    const sls = firstItem(assignment?.sls);
+    const desa = firstItem(sls?.desa);
+    const kecamatan = firstItem(desa?.kecamatan);
+    const pml = firstItem(assignment?.pml);
+    const pcl = firstItem(assignment?.pcl);
+    return {
+      id: report.id,
+      reportDate: report.tanggal,
+      assignmentId: report.penugasan_id,
+      district: kecamatan?.nama ?? "-",
+      village: desa?.nama ?? "-",
+      sls: sls?.kode_sub_sls ? `${sls.nama_sls} / ${sls.kode_sub_sls}` : sls?.nama_sls ?? "-",
+      subSlsId: sls?.id_sub_sls ?? report.penugasan_id,
+      target: Number(assignment?.target_aktual ?? 0),
+      pml: pml?.nama ?? "-",
+      pcl: pcl?.nama ?? "-",
+      visited: Number(report.jumlah_dikunjungi ?? 0),
+      completedToday: Number(report.jumlah_selesai_hari_ini ?? 0),
+      pending: Number(report.pending ?? 0),
+      startTime: String(report.jam_mulai ?? "").slice(0, 5),
+      endTime: String(report.jam_selesai ?? "").slice(0, 5),
+      note: report.catatan ?? undefined,
+      issue: report.kendala ?? undefined,
+      followUpPlan: report.rencana_tindak_lanjut ?? undefined,
+      status: report.status,
+      updatedAt: report.updated_at
+    };
+  });
+}
+
+export async function saveImportedDailyReportAction(input: z.input<typeof importedDailyReportSchema>) {
+  const values = importedDailyReportSchema.parse(input);
+  const supabase = await requireSupabase();
+  const profile = await getProfile(supabase);
+  if (!["pcl", "admin_kabupaten", "super_admin"].includes(profile.role)) throw new Error("Hanya PCL yang dapat menginput laporan harian.");
+
+  const service = createServiceClient();
+  const { data: assignment, error: assignmentError } = await service
+    .from("penugasan")
+    .select("id, kegiatan_id, pcl_id, target_aktual")
+    .eq("id", values.assignment_id)
+    .eq("aktif", true)
+    .single();
+  if (assignmentError || !assignment) throw new Error("Penugasan tidak ditemukan.");
+  if (profile.role === "pcl" && assignment.pcl_id !== profile.petugas_id) throw new Error("PCL hanya dapat memilih SLS tugasnya.");
+
+  const { data: approvedRows, error: approvedError } = await service
+    .from("laporan_harian")
+    .select("jumlah_selesai_hari_ini")
+    .eq("penugasan_id", values.assignment_id)
+    .eq("status", "disetujui");
+  if (approvedError) throw new Error(approvedError.message);
+  const approvedTotal = (approvedRows ?? []).reduce((sum, row) => sum + Number(row.jumlah_selesai_hari_ini ?? 0), 0);
+  if (approvedTotal + values.completed_today > Number(assignment.target_aktual)) {
+    throw new Error("Kumulatif selesai melebihi target aktual dan perlu persetujuan admin.");
+  }
+
+  const { error } = await service
+    .from("laporan_harian")
+    .upsert({
+      kegiatan_id: assignment.kegiatan_id,
+      penugasan_id: values.assignment_id,
+      pcl_id: assignment.pcl_id,
+      tanggal: values.report_date,
+      jam_mulai: values.start_time,
+      jam_selesai: values.end_time,
+      jumlah_dikunjungi: values.visited,
+      jumlah_selesai_hari_ini: values.completed_today,
+      pending: values.pending,
+      kunjungan_ulang: values.revisit,
+      belum_bertemu: values.not_met,
+      menolak: values.refused,
+      tutup_sementara: values.temporarily_closed,
+      tutup_permanen: values.permanently_closed,
+      pindah: values.moved,
+      tidak_ditemukan: values.not_found,
+      duplikat: values.duplicate,
+      usaha_baru: values.new_business,
+      catatan: values.note || null,
+      kendala: values.issue || null,
+      rencana_tindak_lanjut: values.follow_up_plan || null,
+      dokumentasi_path: values.documentation_path || null,
+      status: values.status,
+      dibuat_oleh: profile.id,
+      dikirim_pada: values.status === "dikirim" ? new Date().toISOString() : null
+    }, { onConflict: "penugasan_id,tanggal" });
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard-pcl");
+  revalidatePath("/dashboard-pml");
+  revalidatePath("/pemeriksaan");
+}
+
+export async function reviewImportedDailyReportAction(reportId: string, status: "disetujui" | "dikembalikan") {
+  const supabase = await requireSupabase();
+  const profile = await getProfile(supabase);
+  if (!["pml", "admin_kabupaten", "super_admin"].includes(profile.role)) throw new Error("Hanya PML atau admin yang dapat memeriksa laporan.");
+
+  const service = createServiceClient();
+  const { data: report, error: reportError } = await service
+    .from("laporan_harian")
+    .select("id, penugasan:penugasan_id(pml_id)")
+    .eq("id", z.string().uuid().parse(reportId))
+    .single();
+  if (reportError || !report) throw new Error("Laporan tidak ditemukan.");
+  const assignment = firstItem((report as { penugasan?: MaybeArray<{ pml_id: string }> | null }).penugasan);
+  if (profile.role === "pml" && assignment?.pml_id !== profile.petugas_id) throw new Error("PML hanya dapat memeriksa laporan PCL bawahannya.");
+
+  const { error } = await service.from("laporan_harian").update({ status }).eq("id", reportId);
+  if (error) throw new Error(error.message);
+
+  await service.from("pemeriksaan_laporan").insert({
+    laporan_harian_id: reportId,
+    pml_id: assignment?.pml_id ?? profile.petugas_id,
+    status
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard-pml");
+  revalidatePath("/pemeriksaan");
 }
 
 export async function createOfficerAction(input: z.input<typeof officerSchema>) {

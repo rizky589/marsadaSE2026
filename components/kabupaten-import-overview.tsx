@@ -3,7 +3,7 @@
 import { AlertTriangle, BarChart3, CheckCircle2, ClipboardCheck, MapPinned, Users } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { getImportedAllocationSnapshotAction } from "@/app/actions";
+import { getDailyReportSnapshotAction, getImportedAllocationSnapshotAction } from "@/app/actions";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { loadImportedAllocations, summarizeImportedAllocations, type ImportedAllocationRow } from "@/lib/imported-allocations";
@@ -41,14 +41,26 @@ export function KabupatenImportOverview() {
     }
 
     loadRows();
-    const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
-    if (savedReports) {
+    async function loadReports() {
       try {
-        setReports(JSON.parse(savedReports) as StoredDailyReport[]);
+        const serverReports = await getDailyReportSnapshotAction();
+        if (active) {
+          setReports(serverReports as StoredDailyReport[]);
+          return;
+        }
       } catch {
-        window.localStorage.removeItem(dailyReportsStorageKey);
+        // Local reports remain available before Supabase is configured.
+      }
+      const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
+      if (savedReports) {
+        try {
+          setReports(JSON.parse(savedReports) as StoredDailyReport[]);
+        } catch {
+          window.localStorage.removeItem(dailyReportsStorageKey);
+        }
       }
     }
+    loadReports();
     return () => {
       active = false;
     };

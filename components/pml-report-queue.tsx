@@ -3,6 +3,7 @@
 import { Inbox } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { getDailyReportSnapshotAction, getImportedAllocationSnapshotAction, reviewImportedDailyReportAction } from "@/app/actions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,8 +41,36 @@ export function PmlReportQueue() {
   const [selectedReportId, setSelectedReportId] = useState<string | null>(null);
 
   useEffect(() => {
-    setRows(loadImportedAllocations());
-    loadReports();
+    let active = true;
+    async function loadRows() {
+      try {
+        const snapshot = await getImportedAllocationSnapshotAction();
+        if (active && snapshot.rows.length) {
+          setRows(snapshot.rows);
+          return;
+        }
+      } catch {
+        // Local import preview remains available before Supabase is configured.
+      }
+      if (active) setRows(loadImportedAllocations());
+    }
+    async function loadServerReports() {
+      try {
+        const serverReports = await getDailyReportSnapshotAction();
+        if (active) {
+          setReports(serverReports as StoredDailyReport[]);
+          return;
+        }
+      } catch {
+        // Local reports remain available before Supabase is configured.
+      }
+      loadReports();
+    }
+    loadRows();
+    loadServerReports();
+    return () => {
+      active = false;
+    };
   }, []);
 
   const summary = useMemo(() => {
@@ -72,11 +101,16 @@ export function PmlReportQueue() {
     }
   }
 
-  function updateReportStatus(reportId: string, status: "dikembalikan" | "disetujui") {
+  async function updateReportStatus(reportId: string, status: "dikembalikan" | "disetujui") {
     const nextReports = reports.map((report) => report.id === reportId ? { ...report, status, updatedAt: new Date().toISOString() } : report);
     setReports(nextReports);
     window.localStorage.setItem(dailyReportsStorageKey, JSON.stringify(nextReports));
-    toast.success(status === "disetujui" ? "Laporan disetujui" : "Laporan dikembalikan");
+    try {
+      await reviewImportedDailyReportAction(reportId, status);
+      toast.success(status === "disetujui" ? "Laporan disetujui" : "Laporan dikembalikan");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Status tersimpan lokal, tetapi gagal sinkron ke Supabase");
+    }
   }
 
   return (

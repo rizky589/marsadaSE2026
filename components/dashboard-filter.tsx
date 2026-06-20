@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
-import { getImportedAllocationSnapshotAction } from "@/app/actions";
+import { getDailyReportSnapshotAction, getImportedAllocationSnapshotAction } from "@/app/actions";
 import { CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,14 +80,26 @@ export function DashboardFilter() {
     }
 
     loadRows();
-    const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
-    if (savedReports) {
+    async function loadReports() {
       try {
-        setReports(JSON.parse(savedReports) as StoredDailyReport[]);
+        const serverReports = await getDailyReportSnapshotAction();
+        if (active) {
+          setReports(serverReports as StoredDailyReport[]);
+          return;
+        }
       } catch {
-        window.localStorage.removeItem(dailyReportsStorageKey);
+        // Local reports remain available before Supabase is configured.
+      }
+      const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
+      if (savedReports) {
+        try {
+          setReports(JSON.parse(savedReports) as StoredDailyReport[]);
+        } catch {
+          window.localStorage.removeItem(dailyReportsStorageKey);
+        }
       }
     }
+    loadReports();
     return () => {
       active = false;
     };
@@ -169,8 +181,25 @@ export function DashboardFilter() {
         Progres: percentId(pct(row.selesai, row.target))
       }));
 
+    const updatedAt = new Date();
+    const updatedAtText = new Intl.DateTimeFormat("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+      timeZone: "Asia/Jakarta"
+    }).format(updatedAt).replace(/\./g, ":");
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(exportRows), "Progress PCL");
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      ["Progress per PCL"],
+      [`Diperbarui ${updatedAtText} WIB`],
+      [`Filter aktif: ${filteredRows.length} alokasi`]
+    ]);
+    XLSX.utils.sheet_add_json(worksheet, exportRows, { origin: "A4" });
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Progress PCL");
     XLSX.writeFile(workbook, `progress-pcl-${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast.success(`Excel progress per PCL diunduh`, {
       description: `${numberId(exportRows.length)} PCL sesuai filter aktif.`

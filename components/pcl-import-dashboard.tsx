@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getMyPclAssignmentsAction } from "@/app/actions";
+import { getDailyReportSnapshotAction, getMyPclAssignmentsAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -91,12 +91,17 @@ export function PclImportDashboard() {
 
       setPclName(titleCase(ownedRows[0]?.pcl || name || "PCL"));
       setRows(ownedRows);
-      const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
-      if (savedReports) {
-        try {
-          setReports(JSON.parse(savedReports) as StoredDailyReport[]);
-        } catch {
-          window.localStorage.removeItem(dailyReportsStorageKey);
+      try {
+        const serverReports = await getDailyReportSnapshotAction();
+        setReports((serverReports as StoredDailyReport[]).filter((report) => ownedRows.some((row) => row.idSubSls === report.subSlsId)));
+      } catch {
+        const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
+        if (savedReports) {
+          try {
+            setReports(JSON.parse(savedReports) as StoredDailyReport[]);
+          } catch {
+            window.localStorage.removeItem(dailyReportsStorageKey);
+          }
         }
       }
       setIsLoading(false);

@@ -11,7 +11,7 @@ import { numberId } from "@/lib/utils";
 
 type BulkLoginRow = {
   namaPetugas: string;
-  jenis: "PCL" | "PML";
+  jabatan: "PCL" | "PML";
   email: string;
   password: string;
 };
@@ -67,7 +67,7 @@ export function PetugasLoginCreator() {
     const mapped = json
       .map((row) => ({
         namaPetugas: normalizeText(row.nama_petugas || row["Nama Petugas"] || row.namaPetugas),
-        jenis: normalizeJenis(row.jenis || row.Jenis),
+        jabatan: normalizeJenis(row.jabatan || row.Jabatan || row.jenis || row.Jenis),
         email: normalizeText(row.email || row["Email Login"]),
         password: normalizeText(row.password || row["Password Awal"])
       }))
@@ -87,12 +87,12 @@ export function PetugasLoginCreator() {
       const failed: string[] = [];
       for (const row of bulkRows) {
         try {
-          const role = row.jenis === "PML" ? "pml" : "pcl";
+          const role = row.jabatan === "PML" ? "pml" : "pcl";
           const result = await createPetugasLoginAction({
             email: row.email,
             password: row.password,
             namaPetugas: row.namaPetugas,
-            jenis: row.jenis,
+            jenis: row.jabatan,
             role
           });
           if (result.email) success += 1;
@@ -177,7 +177,7 @@ export function PetugasLoginCreator() {
                   {bulkRows.slice(0, 8).map((row, index) => (
                     <tr key={`${row.email}-${index}`} className="border-t border-[var(--border)]">
                       <td className="px-3 py-2 font-bold">{row.namaPetugas}</td>
-                      <td className="px-3 py-2">{row.jenis}</td>
+                      <td className="px-3 py-2">{row.jabatan}</td>
                       <td className="px-3 py-2">{row.email}</td>
                       <td className="px-3 py-2 font-mono text-xs">{row.password}</td>
                     </tr>

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, Tooltip, XAxis, YAxis } from "recharts";
-import { getImportedAllocationSnapshotAction } from "@/app/actions";
+import { getDailyReportSnapshotAction, getImportedAllocationSnapshotAction } from "@/app/actions";
 import { SafeResponsiveContainer } from "@/components/safe-responsive-container";
 import { loadImportedAllocations, normalizeName, resolvePclName, titleCase, type ImportedAllocationRow } from "@/lib/imported-allocations";
 import { dashboardFiltersFromParams, filterImportedRowsWithReports } from "@/lib/dashboard-filtering";
@@ -64,14 +64,26 @@ export function KabupatenCharts() {
     }
 
     loadRows();
-    const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
-    if (savedReports) {
+    async function loadReports() {
       try {
-        setReports(JSON.parse(savedReports) as StoredDailyReport[]);
+        const serverReports = await getDailyReportSnapshotAction();
+        if (active) {
+          setReports(serverReports as StoredDailyReport[]);
+          return;
+        }
       } catch {
-        window.localStorage.removeItem(dailyReportsStorageKey);
+        // Local reports remain available before Supabase is configured.
+      }
+      const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
+      if (savedReports) {
+        try {
+          setReports(JSON.parse(savedReports) as StoredDailyReport[]);
+        } catch {
+          window.localStorage.removeItem(dailyReportsStorageKey);
+        }
       }
     }
+    loadReports();
     return () => {
       active = false;
     };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getImportedAllocationSnapshotAction } from "@/app/actions";
+import { getDailyReportSnapshotAction, getImportedAllocationSnapshotAction } from "@/app/actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -98,12 +98,17 @@ export function PmlImportDashboard() {
       }
       setRows(importedRows);
 
-      const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
-      if (savedReports) {
-        try {
-          setReports(JSON.parse(savedReports) as StoredDailyReport[]);
-        } catch {
-          window.localStorage.removeItem(dailyReportsStorageKey);
+      try {
+        const serverReports = await getDailyReportSnapshotAction();
+        setReports(serverReports as StoredDailyReport[]);
+      } catch {
+        const savedReports = window.localStorage.getItem(dailyReportsStorageKey);
+        if (savedReports) {
+          try {
+            setReports(JSON.parse(savedReports) as StoredDailyReport[]);
+          } catch {
+            window.localStorage.removeItem(dailyReportsStorageKey);
+          }
         }
       }
     }

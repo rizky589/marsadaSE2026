@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
-import { getMyPclAssignmentsAction } from "@/app/actions";
+import { getMyPclAssignmentsAction, saveImportedDailyReportAction } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
@@ -250,7 +250,7 @@ export function ProgressForm() {
     return value === "dikirim" ? "dikirim" : "draft";
   }
 
-  function onSubmit(values: Values, event?: React.BaseSyntheticEvent) {
+  async function onSubmit(values: Values, event?: React.BaseSyntheticEvent) {
     const submitIntent = resolveSubmitIntent(event);
     const assignment = pclAssignments.find((item) => item.id === values.assignmentId);
     if (!assignment) {
@@ -286,7 +286,34 @@ export function ProgressForm() {
     nextReports.unshift(report);
     window.localStorage.setItem(dailyReportsStorageKey, JSON.stringify(nextReports));
 
-    toast.success(submitIntent === "draft" ? "Laporan tersimpan sebagai draft" : `Laporan ${assignment.sls} dikirim ke PML`);
+    try {
+      await saveImportedDailyReportAction({
+        report_date: values.reportDate,
+        assignment_id: values.assignmentId,
+        start_time: values.startTime,
+        end_time: values.endTime,
+        visited: values.visited,
+        completed_today: values.completedToday,
+        pending: values.pending,
+        revisit: values.revisit,
+        not_met: values.notMet,
+        refused: values.refused,
+        temporarily_closed: values.temporarilyClosed,
+        permanently_closed: values.permanentlyClosed,
+        moved: values.moved,
+        not_found: values.notFound,
+        duplicate: values.duplicate,
+        new_business: values.newBusiness,
+        note: values.note,
+        issue: values.issue,
+        follow_up_plan: values.followUpPlan,
+        documentation_path: values.documentationName,
+        status: submitIntent
+      });
+      toast.success(submitIntent === "draft" ? "Laporan tersimpan sebagai draft" : `Laporan ${assignment.sls} dikirim ke PML`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Laporan tersimpan lokal, tetapi gagal sinkron ke Supabase");
+    }
   }
 
   return (
