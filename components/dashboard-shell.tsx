@@ -26,6 +26,14 @@ type ProfileRecord = {
   role?: string | null;
 };
 
+function normalizeAccountRole(role: string | null | undefined, email: string | undefined) {
+  if (role && role !== "user") return role;
+  const local = email?.split("@")[0]?.toLowerCase() ?? "";
+  if (local.includes("admin")) return "admin_kabupaten";
+  if (local.includes("pml")) return "pml";
+  return "pcl";
+}
+
 const nav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Home, roles: ["super_admin", "admin_kabupaten"] },
   { href: "/dashboard-pcl", label: "PCL", icon: BarChart3, roles: ["pcl", "super_admin", "admin_kabupaten"] },
@@ -90,10 +98,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             role: synced.role
           };
         }
+        const normalizedRole = normalizeAccountRole(profileRecord?.role, user.email);
         setAccount({
           name: profileRecord?.nama_lengkap || profileRecord?.full_name || metadataName || user.email?.split("@")[0] || "Pengguna MARSADA",
           email: user.email ?? "email belum tersedia",
-          role: "admin_kabupaten"
+          role: normalizedRole
         });
       } catch {
         // Supabase may be unavailable in local mock mode; keep a safe fallback.
@@ -108,7 +117,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const target = dashboardPathForRole(account.role);
-    if (pathname === "/profil") router.replace(target as Route);
+    const shouldRedirect =
+      pathname === "/profil" ||
+      (account.role === "pcl" && pathname === "/dashboard") ||
+      (account.role === "pml" && pathname === "/dashboard") ||
+      (account.role === "pimpinan" && pathname === "/dashboard");
+    if (shouldRedirect) router.replace(target as Route);
   }, [account.role, pathname, router]);
 
   async function handleSignOut() {
