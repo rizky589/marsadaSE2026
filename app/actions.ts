@@ -885,14 +885,15 @@ async function getProgressSlsRowsFromBaseTables(service: ReturnType<typeof creat
   }
 
   const assignmentIds = assignmentRows.map((row) => row.id);
+  const assignmentIdSet = new Set(assignmentIds);
   const completedByAssignment = new Map<string, { selesai: number; updatedAt: string | null }>();
   if (assignmentIds.length) {
     const { data: reportsData, error: reportsError } = await service
       .from("laporan_harian")
-      .select("penugasan_id, jumlah_selesai_hari_ini, status, updated_at")
-      .in("penugasan_id", assignmentIds);
+      .select("penugasan_id, jumlah_selesai_hari_ini, status, updated_at");
     if (reportsError) throw new Error(reportsError.message);
     (reportsData ?? []).forEach((report) => {
+      if (!assignmentIdSet.has(String(report.penugasan_id))) return;
       if (report.status !== "disetujui") return;
       const current = completedByAssignment.get(String(report.penugasan_id)) ?? { selesai: 0, updatedAt: null };
       const updatedAt = String(report.updated_at ?? "");

@@ -123,7 +123,7 @@ export function KabupatenCharts() {
   if (!rows.length) {
     return (
       <div className="rounded-3xl border border-orange-200 bg-orange-50/80 p-4 text-sm font-bold text-orange-900 dark:border-orange-500/20 dark:bg-orange-500/10 dark:text-orange-100">
-        Belum ada alokasi tersimpan. Upload dan simpan Excel terlebih dahulu agar grafik kabupaten memakai data nyata.
+        Memuat data alokasi tersimpan dari Supabase.
       </div>
     );
   }

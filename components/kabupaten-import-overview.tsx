@@ -87,7 +87,7 @@ export function KabupatenImportOverview() {
       <section className="relative overflow-hidden rounded-[2rem] bg-[#0b2a4a] p-5 text-white shadow-2xl shadow-blue-950/20 sm:p-7">
         <h2 className="mt-2 max-w-4xl text-3xl font-black sm:text-4xl">Monitoring SE2026 BPS Kab.Labuhanbatu Utara</h2>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-blue-100 sm:text-base">
-          {rows.length ? `${numberId(filteredRows.length)} dari ${numberId(rows.length)} alokasi aktif ditampilkan. Progres resmi menunggu laporan PCL disetujui PML.` : "Upload dan simpan alokasi Excel terlebih dahulu agar dashboard memakai data nyata."}
+          {rows.length ? `${numberId(filteredRows.length)} dari ${numberId(rows.length)} alokasi aktif ditampilkan. Progres resmi menunggu laporan PCL disetujui PML.` : "Memuat data alokasi tersimpan dari Supabase."}
         </p>
         <div className="mt-6 max-w-3xl space-y-2">
           <div className="flex justify-between text-sm font-bold">
