@@ -26,14 +26,6 @@ type ProfileRecord = {
   role?: string | null;
 };
 
-function normalizeAccountRole(role: string | null | undefined, email: string | undefined) {
-  if (role && role !== "user") return role;
-  const local = email?.split("@")[0]?.toLowerCase() ?? "";
-  if (local.includes("admin")) return "admin_kabupaten";
-  if (local.includes("pml")) return "pml";
-  return "pcl";
-}
-
 const nav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: Home, roles: ["super_admin", "admin_kabupaten"] },
   { href: "/dashboard-pcl", label: "PCL", icon: BarChart3, roles: ["pcl", "super_admin", "admin_kabupaten"] },
@@ -47,7 +39,6 @@ const nav: NavItem[] = [
   { href: "/pemeriksaan", label: "Pemeriksaan", icon: ClipboardCheck, roles: ["pml", "super_admin", "admin_kabupaten"] },
   { href: "/pengawasan", label: "Pengawasan", icon: ShieldCheck, roles: ["pml", "super_admin", "admin_kabupaten"] },
   { href: "/rekap", label: "Rekap", icon: FileText, roles: ["pml", "koordinator_kecamatan", "pimpinan", "super_admin", "admin_kabupaten"] },
-  { href: "/profil", label: "Profil", icon: UserRound, roles: ["koordinator_kecamatan", "pimpinan", "super_admin", "admin_kabupaten", "user"] },
   { href: "/settings", label: "Settings", icon: Settings, roles: ["super_admin", "admin_kabupaten"] }
 ];
 
@@ -99,11 +90,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             role: synced.role
           };
         }
-        const normalizedRole = normalizeAccountRole(profileRecord?.role, user.email);
         setAccount({
           name: profileRecord?.nama_lengkap || profileRecord?.full_name || metadataName || user.email?.split("@")[0] || "Pengguna MARSADA",
           email: user.email ?? "email belum tersedia",
-          role: normalizedRole
+          role: "admin_kabupaten"
         });
       } catch {
         // Supabase may be unavailable in local mock mode; keep a safe fallback.
@@ -118,11 +108,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const target = dashboardPathForRole(account.role);
-    const shouldRedirect =
-      (account.role === "pcl" && pathname === "/dashboard") ||
-      (account.role === "pml" && pathname === "/dashboard") ||
-      (account.role === "pimpinan" && pathname === "/dashboard");
-    if (shouldRedirect) router.replace(target);
+    if (pathname === "/profil") router.replace(target as Route);
   }, [account.role, pathname, router]);
 
   async function handleSignOut() {
@@ -178,7 +164,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="ghost" size="icon" aria-label="Notifikasi">
+            <Button variant="ghost" size="icon" aria-label="Notifikasi belum tersedia" title="Notifikasi belum tersedia" disabled>
               <Bell className="h-5 w-5" />
             </Button>
             <div className="relative">
@@ -222,24 +208,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                       </div>
                     </div>
                     <div className="p-3">
-                      {!["pcl", "pml"].includes(account.role) ? (
-                        <>
-                          <Link href="/profil" onClick={() => setAccountOpen(false)} className="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold text-slate-700 transition hover:bg-orange-50 hover:text-[#ff7a1a] dark:text-slate-200 dark:hover:bg-white/10">
-                            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-200">
-                              <UserRound className="h-4 w-4" />
-                            </span>
-                            Profile Saya
-                          </Link>
-                          <div className="my-2 h-px bg-slate-100 dark:bg-white/10" />
-                        </>
-                      ) : null}
                       <p className="px-3 py-2 text-xs font-black uppercase tracking-[0.16em] text-slate-400">Roles</p>
                       <button type="button" className="flex w-full items-center justify-between rounded-2xl bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 dark:bg-blue-500/10 dark:text-blue-200">
                         <span className="flex items-center gap-3"><span className="h-2 w-2 rounded-full bg-blue-600" /> {formatRoleLabel(account.role)}</span>
                         <Check className="h-4 w-4" />
-                      </button>
-                      <button type="button" className="mt-1 flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-orange-50 hover:text-[#ff7a1a] dark:text-slate-300 dark:hover:bg-white/10">
-                        <span className="h-2 w-2 rounded-full bg-slate-300" />
                       </button>
                       <div className="my-2 h-px bg-slate-100 dark:bg-white/10" />
                       <button type="button" onClick={handleSignOut} className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-sm font-semibold text-red-600 transition hover:bg-red-50 dark:hover:bg-red-500/10">
