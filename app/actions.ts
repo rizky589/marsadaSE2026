@@ -252,6 +252,14 @@ function normalizeImportText(value: string) {
   return value.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
+function cleanSupabaseHost(value: string | undefined) {
+  try {
+    return value ? new URL(value.trim()).host : "-";
+  } catch {
+    return "-";
+  }
+}
+
 function uniqueValues(values: string[]) {
   return [...new Set(values.filter(Boolean))];
 }
@@ -944,6 +952,56 @@ export async function getProgressSlsSnapshotAction() {
     progres: Number(row.progres ?? 0),
     laporanUpdatedAt: row.laporan_updated_at ?? null
   }));
+}
+
+async function countTableRows(service: ReturnType<typeof createServiceClient>, table: string) {
+  const { count, error } = await service.from(table).select("*", { count: "exact", head: true });
+  if (error) return { count: 0, error: error.message };
+  return { count: count ?? 0, error: null };
+}
+
+export async function getDashboardDatabaseHealthAction() {
+  await getImportActor();
+  const service = createServiceClient();
+  const tableNames = ["kecamatan", "desa", "sls", "petugas", "penugasan", "laporan_harian", "v_progress_sls"] as const;
+  const results = await Promise.all(tableNames.map(async (table) => [table, await countTableRows(service, table)] as const));
+  const counts = Object.fromEntries(results.map(([table, result]) => [table, result.count])) as Record<(typeof tableNames)[number], number>;
+  const errors = results.filter(([, result]) => result.error).map(([table, result]) => `${table}: ${result.error}`);
+
+  const { data: latestImport } = await service
+    .from("import_batches")
+    .select("nama_file, jumlah_baris, total_target, status, created_at")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data: reportStatus } = await service
+    .from("laporan_harian")
+    .select("status, jumlah_selesai_hari_ini");
+
+  const laporanByStatus = (reportStatus ?? []).reduce<Record<string, { count: number; selesai: number }>>((acc, report) => {
+    const status = String(report.status ?? "-");
+    acc[status] = acc[status] ?? { count: 0, selesai: 0 };
+    acc[status].count += 1;
+    acc[status].selesai += Number(report.jumlah_selesai_hari_ini ?? 0);
+    return acc;
+  }, {});
+
+  return {
+    supabaseHost: cleanSupabaseHost(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    counts,
+    errors,
+    latestImport: latestImport
+      ? {
+        fileName: String(latestImport.nama_file ?? "-"),
+        rowCount: Number(latestImport.jumlah_baris ?? 0),
+        totalTarget: Number(latestImport.total_target ?? 0),
+        status: String(latestImport.status ?? "-"),
+        createdAt: String(latestImport.created_at ?? "")
+      }
+      : null,
+    laporanByStatus
+  };
 }
 
 export async function saveImportedDailyReportAction(input: z.input<typeof importedDailyReportSchema>) {

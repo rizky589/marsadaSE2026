@@ -3,7 +3,7 @@
 import { AlertTriangle, BarChart3, CheckCircle2, ClipboardCheck, Clock3, MapPinned, Users } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { getDailyReportSnapshotAction, getProgressSlsSnapshotAction } from "@/app/actions";
+import { getDailyReportSnapshotAction, getDashboardDatabaseHealthAction, getProgressSlsSnapshotAction } from "@/app/actions";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { dashboardFiltersFromParams } from "@/lib/dashboard-filtering";
@@ -18,10 +18,13 @@ type StoredDailyReport = {
   status: "draft" | "dikirim" | "dikembalikan" | "disetujui";
 };
 
+type DashboardHealth = Awaited<ReturnType<typeof getDashboardDatabaseHealthAction>>;
+
 export function KabupatenImportOverview() {
   const searchParams = useSearchParams();
   const [rows, setRows] = useState<DashboardProgressRow[]>([]);
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
+  const [health, setHealth] = useState<DashboardHealth | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -45,7 +48,16 @@ export function KabupatenImportOverview() {
         if (active) setReports([]);
       }
     }
+    async function loadHealth() {
+      try {
+        const snapshot = await getDashboardDatabaseHealthAction();
+        if (active) setHealth(snapshot);
+      } catch {
+        if (active) setHealth(null);
+      }
+    }
     loadReports();
+    loadHealth();
     return () => {
       active = false;
     };
@@ -114,6 +126,44 @@ export function KabupatenImportOverview() {
           );
         })}
       </section>
+
+      {!rows.length && health ? (
+        <section className="rounded-3xl border border-orange-500/40 bg-orange-500/10 p-4 text-sm text-orange-950 dark:text-orange-50">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="font-black">Diagnostik Supabase</p>
+              <p className="mt-1 text-orange-900/80 dark:text-orange-100/80">
+                Aplikasi membaca database: {health.supabaseHost}. Jika count `penugasan` atau `v_progress_sls` masih 0, import Excel belum tersimpan di Supabase project ini.
+              </p>
+            </div>
+            {health.latestImport ? (
+              <div className="rounded-2xl bg-white/60 px-4 py-3 dark:bg-slate-950/40">
+                <p className="text-xs font-bold uppercase text-orange-800 dark:text-orange-100">Import terakhir</p>
+                <p className="mt-1 font-black">{health.latestImport.fileName}</p>
+                <p className="mt-1 text-xs">Status {health.latestImport.status}, {numberId(health.latestImport.rowCount)} baris</p>
+              </div>
+            ) : null}
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {Object.entries(health.counts).map(([label, value]) => (
+              <div key={label} className="rounded-2xl bg-white/65 p-3 dark:bg-slate-950/40">
+                <p className="text-xs font-bold uppercase text-orange-800 dark:text-orange-100">{label}</p>
+                <p className="mt-1 text-lg font-black">{numberId(value)}</p>
+              </div>
+            ))}
+          </div>
+          {Object.keys(health.laporanByStatus).length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {Object.entries(health.laporanByStatus).map(([status, item]) => (
+                <span key={status} className="rounded-full bg-white/70 px-3 py-1 text-xs font-black dark:bg-slate-950/50">
+                  {status}: {numberId(item.count)} laporan, selesai {numberId(item.selesai)}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {health.errors.length ? <p className="mt-3 font-bold">Error: {health.errors.join(" | ")}</p> : null}
+        </section>
+      ) : null}
     </>
   );
 }
