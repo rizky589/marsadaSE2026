@@ -866,14 +866,24 @@ export async function getDailyReportSnapshotAction() {
 }
 
 async function getProgressSlsRowsFromBaseTables(service: ReturnType<typeof createServiceClient>) {
-  const { data: assignmentsData, error: assignmentsError } = await service
+  const selectColumns = "id, kegiatan_id, sls_id, aktif, created_at, updated_at, target_aktual, sls:sls_id(nama_sls, kode_sub_sls, id_sub_sls, desa:desa_id(nama, kecamatan:kecamatan_id(nama))), pml:pml_id(nama), pcl:pcl_id(nama)";
+  const { data: activeAssignmentsData, error: activeAssignmentsError } = await service
     .from("penugasan")
-    .select("id, kegiatan_id, sls_id, aktif, created_at, updated_at, target_aktual, sls:sls_id(nama_sls, kode_sub_sls, id_sub_sls, desa:desa_id(nama, kecamatan:kecamatan_id(nama))), pml:pml_id(nama), pcl:pcl_id(nama)")
+    .select(selectColumns)
     .eq("aktif", true)
     .order("created_at", { ascending: true });
-  if (assignmentsError) throw new Error(assignmentsError.message);
+  if (activeAssignmentsError) throw new Error(activeAssignmentsError.message);
 
-  const assignmentRows = (assignmentsData ?? []) as unknown as ImportedAssignmentRow[];
+  let assignmentRows = (activeAssignmentsData ?? []) as unknown as ImportedAssignmentRow[];
+  if (!assignmentRows.length) {
+    const { data: allAssignmentsData, error: allAssignmentsError } = await service
+      .from("penugasan")
+      .select(selectColumns)
+      .order("created_at", { ascending: true });
+    if (allAssignmentsError) throw new Error(allAssignmentsError.message);
+    assignmentRows = (allAssignmentsData ?? []) as unknown as ImportedAssignmentRow[];
+  }
+
   const assignmentIds = assignmentRows.map((row) => row.id);
   const completedByAssignment = new Map<string, { selesai: number; updatedAt: string | null }>();
   if (assignmentIds.length) {
@@ -958,8 +968,7 @@ export async function getProgressSlsSnapshotAction() {
   }
 
   if (!data?.length) {
-    const { count } = await service.from("penugasan").select("*", { count: "exact", head: true }).eq("aktif", true);
-    if ((count ?? 0) > 0) return getProgressSlsRowsFromBaseTables(service);
+    return getProgressSlsRowsFromBaseTables(service);
   }
 
   return ((data ?? []) as ProgressSlsViewRow[]).map((row) => ({
