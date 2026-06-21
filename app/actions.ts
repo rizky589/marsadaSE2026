@@ -676,7 +676,11 @@ type PclAssignmentRow = {
 type MaybeArray<T> = T | T[];
 
 type ImportedAssignmentRow = PclAssignmentRow & {
+  kegiatan_id?: string | null;
+  sls_id?: string | null;
+  aktif?: boolean | null;
   created_at?: string | null;
+  updated_at?: string | null;
 };
 
 type ImportedDailyReportRow = {
@@ -864,12 +868,13 @@ export async function getDailyReportSnapshotAction() {
 async function getProgressSlsRowsFromBaseTables(service: ReturnType<typeof createServiceClient>) {
   const { data: assignmentsData, error: assignmentsError } = await service
     .from("penugasan")
-    .select("id, kegiatan_id, target_aktual, sls:sls_id(nama_sls, kode_sub_sls, id_sub_sls, desa:desa_id(nama, kecamatan:kecamatan_id(nama))), pml:pml_id(nama), pcl:pcl_id(nama)")
+    .select("id, kegiatan_id, sls_id, aktif, created_at, updated_at, target_aktual, sls:sls_id(nama_sls, kode_sub_sls, id_sub_sls, desa:desa_id(nama, kecamatan:kecamatan_id(nama))), pml:pml_id(nama), pcl:pcl_id(nama)")
     .eq("aktif", true)
     .order("created_at", { ascending: true });
   if (assignmentsError) throw new Error(assignmentsError.message);
 
-  const assignmentIds = ((assignmentsData ?? []) as unknown as ImportedAssignmentRow[]).map((row) => row.id);
+  const assignmentRows = (assignmentsData ?? []) as unknown as ImportedAssignmentRow[];
+  const assignmentIds = assignmentRows.map((row) => row.id);
   const completedByAssignment = new Map<string, { selesai: number; updatedAt: string | null }>();
   if (assignmentIds.length) {
     const { data: reportsData, error: reportsError } = await service
@@ -888,7 +893,23 @@ async function getProgressSlsRowsFromBaseTables(service: ReturnType<typeof creat
     });
   }
 
-  return ((assignmentsData ?? []) as unknown as ImportedAssignmentRow[]).map((row) => {
+  const rankedRows = [...assignmentRows].sort((a, b) => {
+    const completedA = completedByAssignment.get(a.id)?.selesai ?? 0;
+    const completedB = completedByAssignment.get(b.id)?.selesai ?? 0;
+    if ((completedB > 0 ? 1 : 0) !== (completedA > 0 ? 1 : 0)) return (completedB > 0 ? 1 : 0) - (completedA > 0 ? 1 : 0);
+    if (String(b.updated_at ?? "") !== String(a.updated_at ?? "")) return String(b.updated_at ?? "").localeCompare(String(a.updated_at ?? ""));
+    if (String(b.created_at ?? "") !== String(a.created_at ?? "")) return String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""));
+    return String(a.id).localeCompare(String(b.id));
+  });
+
+  const dedupedRows = new Map<string, ImportedAssignmentRow>();
+  rankedRows.forEach((row) => {
+    const sls = firstItem(row.sls);
+    const key = `${row.kegiatan_id ?? ""}|${row.sls_id ?? sls?.id_sub_sls ?? row.id}`;
+    if (!dedupedRows.has(key)) dedupedRows.set(key, row);
+  });
+
+  return [...dedupedRows.values()].map((row) => {
     const sls = firstItem(row.sls);
     const desa = firstItem(sls?.desa);
     const kecamatan = firstItem(desa?.kecamatan);
@@ -899,7 +920,7 @@ async function getProgressSlsRowsFromBaseTables(service: ReturnType<typeof creat
     const selesai = completed?.selesai ?? 0;
     return {
       penugasanId: row.id,
-      kegiatanId: "",
+      kegiatanId: row.kegiatan_id ?? "",
       kecamatan: kecamatan?.nama ?? "-",
       desa: desa?.nama ?? "-",
       namaSls: sls?.nama_sls ?? "-",
@@ -934,6 +955,11 @@ export async function getProgressSlsSnapshotAction() {
 
   if (error) {
     return getProgressSlsRowsFromBaseTables(service);
+  }
+
+  if (!data?.length) {
+    const { count } = await service.from("penugasan").select("*", { count: "exact", head: true }).eq("aktif", true);
+    if ((count ?? 0) > 0) return getProgressSlsRowsFromBaseTables(service);
   }
 
   return ((data ?? []) as ProgressSlsViewRow[]).map((row) => ({
