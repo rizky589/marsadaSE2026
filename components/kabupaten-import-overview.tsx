@@ -3,11 +3,11 @@
 import { AlertTriangle, BarChart3, CheckCircle2, ClipboardCheck, MapPinned, Users } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { getDailyReportSnapshotAction, getImportedAllocationSnapshotAction } from "@/app/actions";
+import { getDailyReportSnapshotAction, getProgressSlsSnapshotAction } from "@/app/actions";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { loadImportedAllocations, summarizeImportedAllocations, type ImportedAllocationRow } from "@/lib/imported-allocations";
-import { dashboardFiltersFromParams, filterImportedRowsWithReports } from "@/lib/dashboard-filtering";
+import { dashboardFiltersFromParams } from "@/lib/dashboard-filtering";
+import { filterProgressRows, summarizeProgressRows, type DashboardProgressRow } from "@/lib/dashboard-progress";
 import { numberId, pct, percentId } from "@/lib/utils";
 
 type StoredDailyReport = {
@@ -20,22 +20,18 @@ type StoredDailyReport = {
 
 export function KabupatenImportOverview() {
   const searchParams = useSearchParams();
-  const [rows, setRows] = useState<ImportedAllocationRow[]>([]);
+  const [rows, setRows] = useState<DashboardProgressRow[]>([]);
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
 
   useEffect(() => {
     let active = true;
     async function loadRows() {
       try {
-        const snapshot = await getImportedAllocationSnapshotAction();
-        if (active && snapshot.rows.length) {
-          setRows(snapshot.rows);
-          return;
-        }
+        const snapshot = await getProgressSlsSnapshotAction();
+        if (active) setRows(snapshot as DashboardProgressRow[]);
       } catch {
-        // Local import preview remains available before Supabase is configured.
+        if (active) setRows([]);
       }
-      if (active) setRows(loadImportedAllocations());
     }
 
     loadRows();
@@ -55,12 +51,11 @@ export function KabupatenImportOverview() {
     };
   }, []);
 
-  const filteredRows = useMemo(() => filterImportedRowsWithReports(rows, dashboardFiltersFromParams(searchParams), reports), [rows, reports, searchParams]);
+  const filteredRows = useMemo(() => filterProgressRows(rows, dashboardFiltersFromParams(searchParams), reports), [rows, reports, searchParams]);
   const filteredSubSlsIds = useMemo(() => new Set(filteredRows.map((row) => row.idSubSls)), [filteredRows]);
-  const summary = useMemo(() => summarizeImportedAllocations(filteredRows), [filteredRows]);
-  const approvedReports = useMemo(() => reports.filter((report) => report.status === "disetujui"), [reports]);
-  const completed = useMemo(() => approvedReports.filter((report) => filteredSubSlsIds.has(report.subSlsId)).reduce((sum, report) => sum + report.completedToday, 0), [approvedReports, filteredSubSlsIds]);
-  const remaining = Math.max(0, summary.target - completed);
+  const summary = useMemo(() => summarizeProgressRows(filteredRows), [filteredRows]);
+  const completed = summary.selesai;
+  const remaining = summary.sisa;
   const progressValue = pct(completed, summary.target);
   const today = new Date().toISOString().slice(0, 10);
   const activeToday = new Set(reports.filter((report) => report.reportDate === today && filteredSubSlsIds.has(report.subSlsId)).map((report) => report.pcl)).size;

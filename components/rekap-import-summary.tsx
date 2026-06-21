@@ -1,27 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getImportedAllocationSnapshotAction } from "@/app/actions";
+import { getProgressSlsSnapshotAction } from "@/app/actions";
 import { EvaluationExport } from "@/components/evaluation-export";
-import { loadImportedAllocations, summarizeImportedAllocations, type ImportedAllocationRow } from "@/lib/imported-allocations";
-import { numberId } from "@/lib/utils";
+import { summarizeProgressRows, type DashboardProgressRow } from "@/lib/dashboard-progress";
+import { numberId, pct, percentId } from "@/lib/utils";
 
 export function RekapImportSummary() {
-  const [rows, setRows] = useState<ImportedAllocationRow[]>([]);
+  const [rows, setRows] = useState<DashboardProgressRow[]>([]);
 
   useEffect(() => {
     let active = true;
     async function loadRows() {
       try {
-        const snapshot = await getImportedAllocationSnapshotAction();
-        if (active && snapshot.rows.length) {
-          setRows(snapshot.rows);
-          return;
-        }
+        const snapshot = await getProgressSlsSnapshotAction();
+        if (active) setRows(snapshot as DashboardProgressRow[]);
       } catch {
-        // Local import preview remains available before Supabase is configured.
+        if (active) setRows([]);
       }
-      if (active) setRows(loadImportedAllocations());
     }
 
     loadRows();
@@ -30,7 +26,7 @@ export function RekapImportSummary() {
     };
   }, []);
 
-  const summary = useMemo(() => summarizeImportedAllocations(rows), [rows]);
+  const summary = useMemo(() => summarizeProgressRows(rows), [rows]);
 
   if (!rows.length) {
     return (
@@ -45,9 +41,9 @@ export function RekapImportSummary() {
       <EvaluationExport rows={rows} />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="Target Kabupaten" value={numberId(summary.target)} />
-        <Metric label="Selesai" value="0" />
-        <Metric label="Sisa" value={numberId(summary.target)} />
-        <Metric label="Progres" value="0%" />
+        <Metric label="Selesai" value={numberId(summary.selesai)} />
+        <Metric label="Sisa" value={numberId(summary.sisa)} />
+        <Metric label="Progres" value={percentId(pct(summary.selesai, summary.target))} />
         <Metric label="Kecamatan" value={numberId(summary.kecamatan)} />
         <Metric label="Desa" value={numberId(summary.desa)} />
         <Metric label="PML" value={numberId(summary.pml)} />

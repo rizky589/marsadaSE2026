@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, Tooltip, XAxis, YAxis } from "recharts";
-import { getDailyReportSnapshotAction, getImportedAllocationSnapshotAction } from "@/app/actions";
+import { getDailyReportSnapshotAction, getProgressSlsSnapshotAction } from "@/app/actions";
 import { SafeResponsiveContainer } from "@/components/safe-responsive-container";
-import { loadImportedAllocations, normalizeName, resolvePclName, titleCase, type ImportedAllocationRow } from "@/lib/imported-allocations";
-import { dashboardFiltersFromParams, filterImportedRowsWithReports } from "@/lib/dashboard-filtering";
+import { resolvePclName, titleCase } from "@/lib/imported-allocations";
+import { dashboardFiltersFromParams } from "@/lib/dashboard-filtering";
+import { filterProgressRows, type DashboardProgressRow } from "@/lib/dashboard-progress";
 import { numberId, pct, percentId } from "@/lib/utils";
 
 const colors = ["#2563eb", "#ff7a1a", "#10b981", "#ef4444", "#64748b", "#8b5cf6"];
@@ -35,13 +36,13 @@ function ChartBox({ title, children }: { title: string; children: React.ReactNod
   );
 }
 
-function groupTargets(rows: ImportedAllocationRow[], completedBySubSls: Map<string, number>, keyFn: (row: ImportedAllocationRow) => string) {
+function groupTargets(rows: DashboardProgressRow[], keyFn: (row: DashboardProgressRow) => string) {
   const map = new Map<string, { target: number; selesai: number }>();
   rows.forEach((row) => {
     const key = keyFn(row);
     const current = map.get(key) ?? { target: 0, selesai: 0 };
-    current.target += row.targetAwal;
-    current.selesai += completedBySubSls.get(row.idSubSls) ?? 0;
+    current.target += row.target;
+    current.selesai += row.selesai;
     map.set(key, current);
   });
   return [...map.entries()].map(([name, value]) => ({ name, target: value.target, selesai: value.selesai, progress: pct(value.selesai, value.target) }));
@@ -49,22 +50,18 @@ function groupTargets(rows: ImportedAllocationRow[], completedBySubSls: Map<stri
 
 export function KabupatenCharts() {
   const searchParams = useSearchParams();
-  const [rows, setRows] = useState<ImportedAllocationRow[]>([]);
+  const [rows, setRows] = useState<DashboardProgressRow[]>([]);
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
 
   useEffect(() => {
     let active = true;
     async function loadRows() {
       try {
-        const snapshot = await getImportedAllocationSnapshotAction();
-        if (active && snapshot.rows.length) {
-          setRows(snapshot.rows);
-          return;
-        }
+        const snapshot = await getProgressSlsSnapshotAction();
+        if (active) setRows(snapshot as DashboardProgressRow[]);
       } catch {
-        // Local import preview remains available before Supabase is configured.
+        if (active) setRows([]);
       }
-      if (active) setRows(loadImportedAllocations());
     }
 
     loadRows();
@@ -85,21 +82,17 @@ export function KabupatenCharts() {
   }, []);
 
   const data = useMemo(() => {
-    const filteredRows = filterImportedRowsWithReports(rows, dashboardFiltersFromParams(searchParams), reports);
+    const filteredRows = filterProgressRows(rows, dashboardFiltersFromParams(searchParams), reports);
     const filteredSubSlsIds = new Set(filteredRows.map((row) => row.idSubSls));
-    const target = filteredRows.reduce((sum, row) => sum + row.targetAwal, 0);
+    const target = filteredRows.reduce((sum, row) => sum + row.target, 0);
     const approvedReports = reports.filter((report) => report.status === "disetujui");
     const filteredApprovedReports = approvedReports.filter((report) => filteredSubSlsIds.has(report.subSlsId));
-    const completed = filteredApprovedReports.reduce((sum, report) => sum + report.completedToday, 0);
-    const completedBySubSls = new Map<string, number>();
-    filteredApprovedReports.forEach((report) => {
-      completedBySubSls.set(report.subSlsId, (completedBySubSls.get(report.subSlsId) ?? 0) + report.completedToday);
-    });
-    const districtRows = groupTargets(filteredRows, completedBySubSls, (row) => titleCase(row.kecamatan));
-    const pmlRows = groupTargets(filteredRows, completedBySubSls, (row) => titleCase(row.pml));
+    const completed = filteredRows.reduce((sum, row) => sum + row.selesai, 0);
+    const districtRows = groupTargets(filteredRows, (row) => titleCase(row.kecamatan));
+    const pmlRows = groupTargets(filteredRows, (row) => titleCase(row.pml));
     const pmlChartRows = [...pmlRows].sort((a, b) => b.target - a.target).slice(0, 15);
-    const burdenRows = groupTargets(filteredRows, completedBySubSls, (row) => titleCase(resolvePclName(row.pcl, row.pml))).sort((a, b) => b.target - a.target).slice(0, 15);
-    const lowPclRows = groupTargets(filteredRows, completedBySubSls, (row) => titleCase(resolvePclName(row.pcl, row.pml))).sort((a, b) => a.progress - b.progress).slice(0, 15);
+    const burdenRows = groupTargets(filteredRows, (row) => titleCase(resolvePclName(row.pcl, row.pml))).sort((a, b) => b.target - a.target).slice(0, 15);
+    const lowPclRows = groupTargets(filteredRows, (row) => titleCase(resolvePclName(row.pcl, row.pml))).sort((a, b) => a.progress - b.progress).slice(0, 15);
     const highNeedRows = burdenRows.map((row) => ({ name: row.name, kebutuhan: Math.ceil(Math.max(0, row.target - row.selesai) / 57) })).sort((a, b) => b.kebutuhan - a.kebutuhan).slice(0, 15);
     const statuses = ["draft", "dikirim", "dikembalikan", "disetujui"] as const;
     const statusRows = [

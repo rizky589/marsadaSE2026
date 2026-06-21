@@ -6,19 +6,14 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
-import { getDailyReportSnapshotAction, getImportedAllocationSnapshotAction } from "@/app/actions";
+import { getDailyReportSnapshotAction, getProgressSlsSnapshotAction } from "@/app/actions";
 import { CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { dashboardFiltersFromParams, filterImportedRowsWithReports } from "@/lib/dashboard-filtering";
-import type { ImportedAllocationRow } from "@/lib/imported-allocations";
+import { dashboardFiltersFromParams } from "@/lib/dashboard-filtering";
+import { filterProgressRows, type DashboardProgressRow } from "@/lib/dashboard-progress";
 import { numberId, pct, percentId } from "@/lib/utils";
 
-type StoredImport = {
-  rows?: ImportedAllocationRow[];
-};
-
-const storageKey = "marsada-imported-allocations";
 type StoredDailyReport = {
   subSlsId: string;
   reportDate: string;
@@ -46,34 +41,19 @@ export function DashboardFilter() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [rows, setRows] = useState<ImportedAllocationRow[]>([]);
+  const [rows, setRows] = useState<DashboardProgressRow[]>([]);
   const [reports, setReports] = useState<StoredDailyReport[]>([]);
 
   useEffect(() => {
     let active = true;
 
-    function loadLocalImport() {
-      const saved = window.localStorage.getItem(storageKey);
-      if (!saved || !active) return;
-      try {
-        const parsed = JSON.parse(saved) as StoredImport;
-        setRows((parsed.rows ?? []).filter((row) => row.idSubSls && row.targetAwal > 0));
-      } catch {
-        window.localStorage.removeItem(storageKey);
-      }
-    }
-
     async function loadRows() {
       try {
-        const snapshot = await getImportedAllocationSnapshotAction();
-        if (active && snapshot.rows.length) {
-          setRows(snapshot.rows);
-          return;
-        }
+        const snapshot = await getProgressSlsSnapshotAction();
+        if (active) setRows(snapshot as DashboardProgressRow[]);
       } catch {
-        // Local import preview remains available before Supabase is configured.
+        if (active) setRows([]);
       }
-      loadLocalImport();
     }
 
     loadRows();
@@ -104,7 +84,7 @@ export function DashboardFilter() {
     };
   }, [rows]);
 
-  const filteredRows = useMemo(() => filterImportedRowsWithReports(rows, selected, reports), [rows, reports, selected]);
+  const filteredRows = useMemo(() => filterProgressRows(rows, selected, reports), [rows, reports, selected]);
 
   function setFilter(key: "kecamatan" | "desa" | "pml" | "pcl" | "status_laporan" | "status_progress", value: string) {
     const next = new URLSearchParams(searchParams);
@@ -126,12 +106,6 @@ export function DashboardFilter() {
       return;
     }
 
-    const approvedReports = reports.filter((report) => report.status === "disetujui");
-    const completedBySubSls = new Map<string, number>();
-    approvedReports.forEach((report) => {
-      completedBySubSls.set(report.subSlsId, (completedBySubSls.get(report.subSlsId) ?? 0) + report.completedToday);
-    });
-
     const grouped = new Map<string, { pml: string; pcl: string; kecamatan: Set<string>; desa: Set<string>; sls: number; target: number; selesai: number }>();
     filteredRows.forEach((row) => {
       const pcl = titleCase(resolvePclName(row.pcl, row.pml));
@@ -141,8 +115,8 @@ export function DashboardFilter() {
       current.kecamatan.add(titleCase(row.kecamatan));
       current.desa.add(titleCase(row.desa));
       current.sls += 1;
-      current.target += row.targetAwal;
-      current.selesai += completedBySubSls.get(row.idSubSls) ?? 0;
+      current.target += row.target;
+      current.selesai += row.selesai;
       grouped.set(key, current);
     });
 

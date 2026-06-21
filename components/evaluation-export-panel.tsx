@@ -1,26 +1,22 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getImportedAllocationSnapshotAction } from "@/app/actions";
+import { getProgressSlsSnapshotAction } from "@/app/actions";
 import { EvaluationExport } from "@/components/evaluation-export";
-import { loadImportedAllocations, type ImportedAllocationRow } from "@/lib/imported-allocations";
+import type { DashboardProgressRow } from "@/lib/dashboard-progress";
 
 export function EvaluationExportPanel() {
-  const [rows, setRows] = useState<ImportedAllocationRow[]>([]);
+  const [rows, setRows] = useState<DashboardProgressRow[]>([]);
 
   useEffect(() => {
     let active = true;
     async function loadRows() {
       try {
-        const snapshot = await getImportedAllocationSnapshotAction();
-        if (active && snapshot.rows.length) {
-          setRows(snapshot.rows);
-          return;
-        }
+        const snapshot = await getProgressSlsSnapshotAction();
+        if (active) setRows(snapshot as DashboardProgressRow[]);
       } catch {
-        // Local import preview remains available before Supabase is configured.
+        if (active) setRows([]);
       }
-      if (active) setRows(loadImportedAllocations());
     }
 
     loadRows();
