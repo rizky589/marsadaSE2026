@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, BarChart3, CheckCircle2, ClipboardCheck, MapPinned, Users } from "lucide-react";
+import { AlertTriangle, BarChart3, CheckCircle2, ClipboardCheck, Clock3, MapPinned, Users } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { getDailyReportSnapshotAction, getProgressSlsSnapshotAction } from "@/app/actions";
@@ -60,6 +60,8 @@ export function KabupatenImportOverview() {
   const today = new Date().toISOString().slice(0, 10);
   const activeToday = new Set(reports.filter((report) => report.reportDate === today && filteredSubSlsIds.has(report.subSlsId)).map((report) => report.pcl)).size;
   const pendingReports = reports.filter((report) => report.status === "dikirim" && filteredSubSlsIds.has(report.subSlsId)).length;
+  const approvedReports = reports.filter((report) => report.status === "disetujui" && filteredSubSlsIds.has(report.subSlsId));
+  const approvedCompleted = approvedReports.reduce((sum, report) => sum + report.completedToday, 0);
   const stats = [
     { label: "Jumlah Kecamatan", value: numberId(summary.kecamatan), icon: MapPinned, tone: "text-blue-600" },
     { label: "Jumlah Desa", value: numberId(summary.desa), icon: MapPinned, tone: "text-emerald-600" },
@@ -73,6 +75,9 @@ export function KabupatenImportOverview() {
     { label: "PCL Aktif Hari Ini", value: numberId(activeToday), icon: Users, tone: "text-emerald-600" },
     { label: "PCL Belum Melapor", value: numberId(Math.max(0, summary.pcl - activeToday)), icon: AlertTriangle, tone: "text-orange-600" },
     { label: "Belum Diperiksa", value: numberId(pendingReports), icon: ClipboardCheck, tone: "text-blue-600" },
+    { label: "Laporan Disetujui", value: numberId(approvedReports.length), icon: CheckCircle2, tone: "text-emerald-600" },
+    { label: "Selesai Disetujui", value: numberId(approvedCompleted), icon: CheckCircle2, tone: "text-emerald-600" },
+    { label: "Diperbarui", value: summary.updatedAt ? new Date(summary.updatedAt).toLocaleString("id-ID") : "Belum ada", icon: Clock3, tone: "text-blue-600" },
     { label: "Kendala Aktif", value: "0", icon: AlertTriangle, tone: "text-orange-600" },
     { label: "Kendala Kritis", value: "0", icon: AlertTriangle, tone: "text-red-600" }
   ];
